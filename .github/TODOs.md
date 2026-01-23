@@ -10,6 +10,7 @@ This file tracks the work planned and completed for this repository. Keep the mo
 - NOTE: Per owner preference, do NOT add CI workflows. Keep tests local and lightweight; run with `pytest` locally. If you want CI later, open a new TODO.
 
 - [ ] (Todo) Improve extraction path when `py7zr` is missing (document and optionally auto-install or warn clearly)
-- [ ] (Todo) Add small test harness for `run_vimms.py --dry-run` behavior
+- [x] (Completed) Add small test harness for `run_vimms.py --dry-run` behavior — 2026-01-24
+- [x] (Completed) Allow `src_root` to be read from `vimms_config.json` and ignore obvious non-console folders when scanning workspace root — 2026-01-24
 
 (End of list)

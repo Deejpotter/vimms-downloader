@@ -120,7 +120,7 @@ MAX_RETRIES = 3                       # Maximum number of retry attempts
 class VimmsDownloader:
     """Main downloader class for Vimm's Lair"""
     
-    def __init__(self, download_dir: str, system: str, progress_file: str = "download_progress.json", detect_existing: bool = True, delete_duplicates: bool = False, auto_confirm_delete: bool = False, pre_scan: bool = True, extract_files: Optional[bool] = None, section_priority_override: Optional[List[str]] = None):
+    def __init__(self, download_dir: str, system: str, progress_file: str = "download_progress.json", detect_existing: bool = True, delete_duplicates: bool = False, auto_confirm_delete: bool = False, pre_scan: bool = True, extract_files: Optional[bool] = None, section_priority_override: Optional[List[str]] = None, project_root: Optional[str] = None):
         """
         Initialize the downloader
         
@@ -128,6 +128,7 @@ class VimmsDownloader:
             download_dir: Directory to save downloaded files
             system: Console system code (e.g., 'DS', 'PS1', 'N64')
             progress_file: JSON file to track download progress
+            project_root: Optional path to the repository or "src" root where config files live
         """
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(exist_ok=True)
@@ -146,8 +147,11 @@ class VimmsDownloader:
         # Will be populated by `_build_local_index()` when pre_scan is enabled
         self.local_index = None  # type: Optional[Dict[str, List[Path]]]
         self._local_index_keys = None  # cached list of normalized keys
+        # Project root (useful when running scripts from a separate working directory)
+        self.project_root = Path(project_root).resolve() if project_root else Path(__file__).parent
+
         # Load optional top-level config (vimms_config.json) to override defaults
-        cfg_path = Path(__file__).parent / 'vimms_config.json'
+        cfg_path = self.project_root / 'vimms_config.json'
         cfg = {}
         if cfg_path.exists():
             try:
@@ -707,7 +711,7 @@ class VimmsDownloader:
 
     def _confirm_and_remove_duplicates(self, keep: Path, extras: List[Path]):
         """Prompt to remove `extras`, moving them to a backup folder if confirmed."""
-        root = Path(__file__).parent
+        root = self.project_root
         backup_root = root / 'scripts' / 'deleted_duplicates'
         backup_root.mkdir(parents=True, exist_ok=True)
 
@@ -1340,6 +1344,7 @@ def main():
     parser.add_argument('--extract-files', action='store_true', help='Extract archive files after download (default: only DS extracts unless overridden)')
     parser.add_argument('--delete-duplicates', action='store_true', help='When multiple local matches are found for a title, offer to remove redundant files (prompts per-title)')
     parser.add_argument('--yes-delete', action='store_true', help='Auto-confirm deletion of duplicates (use with caution)')
+    parser.add_argument('--src', help='Path to the project/src root where `vimms_config.json` and scripts live (useful when running from a different CWD)')
     args = parser.parse_args()
 
     # Parse optional section-priority override passed from runner
@@ -1352,7 +1357,8 @@ def main():
     if args.folder:
         script_dir = Path(args.folder).expanduser().resolve()
     else:
-        script_dir = Path(__file__).parent
+        # Allow running from a different working directory by passing --src
+        script_dir = Path(args.src).expanduser().resolve() if args.src else Path(__file__).parent
 
     # Auto-detect console from folder name
     console = detect_console_from_folder(script_dir)

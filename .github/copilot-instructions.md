@@ -80,6 +80,7 @@ Agent workflow & repository rules (must-follow)
 These points describe the exact workflow and constraints an AI agent should follow when making changes in this repository. Follow them in order for each task.
 
 #codebase
+
 1. **Read the README first** to understand the correct workflow and expected behavior before proposing or making changes.
 2. **Use Context7 / library docs** to find canonical documentation for libraries or APIs before implementing changes. Use the `mcp_context7_resolve-library-id` and `mcp_context7_get-library-docs` tools when available. (#tool:mcp_context7_resolve-library-id, #tool:mcp_context7_get-library-docs)
 3. **Search web resources** for missing documentation or best-practices using the provided search tools (Google/DuckDuckGo via my-mcp-server). Use `activate_search_tools` and `mcp_my-mcp-server_search_documentation` for these queries. (#tool:activate_search_tools, #tool:mcp_my-mcp-server_search_documentation)
@@ -101,6 +102,7 @@ name: "Agent workflow"
 description: "Repository-specific agent rules and search/tool usage"
 applyTo: "**/*"
 ---
+
 - Read the README before any change.
 - Update `.github/TODOs.md` before and after work.
 - Use #tool:mcp_context7_get-library-docs and #tool:mcp_my-mcp-server_search_documentation for documentation lookups.

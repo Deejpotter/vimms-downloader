@@ -37,10 +37,14 @@ import json
 from datetime import datetime
 
 ROOT = Path(__file__).parent
-CANONICAL = ROOT / 'download_vimms.py'
+
+# Folders to ignore when scanning workspace root for console folders
+SKIP_FOLDER_NAMES = {
+    '.git', '.github', '.venv', '.pytest_cache', '.vscode', 'tests', '__pycache__', 'scripts', 'saves'
+}
 
 
-def resolve_target(folder_arg: str, root: Path = ROOT) -> Path:
+def resolve_target(folder_arg: str, root: Path) -> Path:
     """Resolve a user-supplied folder argument to an absolute Path.
 
     Behavior:
@@ -124,9 +128,9 @@ def main(argv=None):
     parser.add_argument('--report', action='store_true', help='Generate a progress report per console instead of running downloads')
     parser.add_argument('--report-format', choices=['json', 'csv'], default='json', help='Report file format (default: json)')
     parser.add_argument('--report-aggregate', action='store_true', help='Also write an overall summary under reports/overall_progress.json')
+    parser.add_argument('--src', help='Path to the project/src root where the downloader script and config live (useful when running the runner from a different CWD)')
 
     args = parser.parse_args(argv)
-
     def _read_progress_summary(folder: Path):
         """Read progress info for a console folder to report what's already done.
 
@@ -191,40 +195,76 @@ def main(argv=None):
     else:
         # Interpret each key as a folder name mapping to per-folder config
         for k, v in cfg_folders.items():
-            # if this key looks like the old whitelist/blacklist, skip mapping
-            if k in ('whitelist', 'blacklist'):
+            # Skip comment/metadata keys beginning with underscore and legacy whitelist/blacklist
+            if k.startswith('_') or k in ('whitelist', 'blacklist'):
                 continue
             per_folder_map[str(k)] = v if isinstance(v, dict) else {}
 
     # If a single folder was provided, just run that one
+    # Determine runtime_root: CLI --src-root > config.src_root > workspace ROOT
+    cfg_src_root = None
+    try:
+        # Prefer 'src' key, fall back to older 'src_root' or 'project_root' keys
+        cfg_src_root = cfg.get('src') or cfg.get('src_root') or cfg.get('project_root')
+    except Exception:
+        cfg_src_root = None
+
+    runtime_root = Path(args.src).resolve() if args.src else (Path(cfg_src_root).resolve() if cfg_src_root else ROOT)
+
     if args.folder:
-        target = resolve_target(args.folder, ROOT)
+        target = resolve_target(args.folder, runtime_root)
         run_list = [target]
     else:
-        # Iterate top-level workspace folders and apply whitelist/blacklist rules
+        # If a top-level `folders` mapping is present, prefer using it as authoritative
         run_candidates = []
         try:
-            # Collect candidate folders and record original index for stable ordering
-            for idx, child in enumerate(sorted(ROOT.iterdir())):
-                if not child.is_dir():
-                    continue
-                name = child.name
+            if per_folder_map:
+                # Use per-folder entries to resolve paths (support `path` override)
+                for idx, (name, pf) in enumerate(per_folder_map.items()):
+                    if pf.get('active') is False:
+                        continue
+                    # If a specific path is provided in the per-folder config, use it
+                    pf_path = pf.get('path')
+                    if pf_path:
+                        p = Path(pf_path).expanduser()
+                        if not p.is_absolute():
+                            p = runtime_root / p
+                    else:
+                        # Default: runtime_root / name
+                        p = runtime_root / name
 
-                # If explicit per-folder map exists, use its active flag
-                if per_folder_map:
-                    pf = per_folder_map.get(name)
-                    if pf is not None:
-                        if pf.get('active') is False:
-                            continue
-                        run_candidates.append((child, idx))
+                    # Try to resolve case-insensitive if missing
+                    if not p.exists():
+                        try:
+                            for child in runtime_root.iterdir():
+                                if child.is_dir() and child.name.lower() == name.lower():
+                                    p = child
+                                    break
+                        except Exception:
+                            pass
+
+                    if p.exists() and p.is_dir():
+                        run_candidates.append((p, idx))
+                    else:
+                        # Skip but note for visibility
+                        print(f"  • Skipping configured folder '{name}': path not found ({p})")
+            else:
+                # No per-folder mapping: iterate workspace folders but skip obvious non-console dirs
+                for idx, child in enumerate(sorted(runtime_root.iterdir())):
+                    if not child.is_dir():
+                        continue
+                    name = child.name
+                    # Skip hidden/system and known non-console folders
+                    if name.startswith('.') or name.lower() in SKIP_FOLDER_NAMES:
                         continue
 
-                # Fall back to whitelist/blacklist behavior when no per-folder map
-                if whitelist and name not in whitelist:
-                    continue
-                if name in blacklist:
-                    continue
-                run_candidates.append((child, idx))
+                    # Fall back to whitelist/blacklist behavior when present
+                    if whitelist and name not in whitelist:
+                        continue
+                    if name in blacklist:
+                        continue
+
+                    run_candidates.append((child, idx))
         except Exception as e:
             print('Error listing workspace folders:', e)
             raise SystemExit(1)
@@ -249,9 +289,18 @@ def main(argv=None):
         sorted_candidates = sorted(run_candidates, key=lambda ci: _folder_priority(ci[0].name, ci[1]))
         run_list = [c[0] for c in sorted_candidates]
 
-    if not CANONICAL.exists():
-        print(f"Canonical downloader not found at: {CANONICAL}")
-        raise SystemExit(1)
+    # Resolve canonical downloader path from runtime_root so runner can be used from any cwd
+    canonical = runtime_root / 'download_vimms.py'
+    if not canonical.exists():
+        # If the runtime_root doesn't contain a canonical downloader, fall back to the
+        # repository-local canonical so users can point --src at a data directory (e.g., H:/Games)
+        fallback = ROOT / 'download_vimms.py'
+        if fallback.exists():
+            print(f"Canonical downloader not found at: {canonical}. Falling back to local repo canonical at {fallback}")
+            canonical = fallback
+        else:
+            print(f"Canonical downloader not found at: {canonical}")
+            raise SystemExit(1)
 
     # Read top-level defaults from the config (if present)
     top_defaults = cfg.get('defaults', {}) if isinstance(cfg, dict) else {}
@@ -556,7 +605,10 @@ def main(argv=None):
         print(f"  Already completed: {pre['completed']}  |  Failed: {pre['failed']}  |  Last section: {last_sec}")
         print('-' * 80)
 
-        cmd = [args.python, str(CANONICAL), '--folder', str(t)] + flags
+        cmd = [args.python, str(canonical), '--folder', str(t)] + flags
+        # If the canonical downloader lives in a different directory add src to ensure it uses the same project root
+        if args.src:
+            cmd.extend(['--src', str(args.src)])
         print('Running:', ' '.join(f'"{c}"' if ' ' in c else c for c in cmd))
         ret = subprocess.call(cmd)
         if ret != 0:
