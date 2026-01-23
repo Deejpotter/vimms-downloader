@@ -1,0 +1,110 @@
+{
+  "_comment": "Top-level configuration for the Vimm runner and downloader. Use the 'folders' mapping to control per-folder behavior.",
+  "folders": {
+    "_comment": "Per-folder mapping: keys are folder names in the workspace. Use 'active':false to skip a folder.",
+    "DS": {
+      "_comment": "Nintendo DS folder: DS uses extraction by default in this workspace.",
+      "active": true,
+      "extract_files": true,
+      "priority": 1
+    },
+    "Dreamcast": {
+      "_comment": "Dreamcast (Sega) console folder — active",
+      "active": true,
+      "priority": 6
+    },
+    "GB": {
+      "_comment": "Game Boy (GB) folder — active.",
+      "active": true,
+      "priority": 10
+    },
+    "GBA": {
+      "_comment": "Game Boy Advance (GBA) folder — active.",
+      "active": true,
+      "priority": 2
+    },
+    "GBC": {
+      "_comment": "Game Boy Color (GBC) folder — active.",
+      "active": true,
+      "priority": 4
+    },
+    "GC": {
+      "_comment": "GameCube (GC) folder — active.",
+      "active": false
+    },
+    "Genesis": {
+      "_comment": "Sega Genesis / Mega Drive folder — active.",
+      "active": true,
+      "priority": 8
+    },
+    "N64": {
+      "_comment": "Nintendo 64 (N64) folder — active.",
+      "active": true,
+      "priority": 3
+    },
+    "NES": {
+      "_comment": "Nintendo Entertainment System (NES) folder — active.",
+      "active": true,
+      "priority": 6
+    },
+    "PS1": {
+      "_comment": "PlayStation 1 (PS1) folder — active.",
+      "active": false,
+      "priority": 5
+    },
+    "PS2": {
+      "_comment": "PlayStation 2 (PS2) folder — active.",
+      "active": false
+    },
+    "PSP": {
+      "_comment": "PlayStation Portable (PSP) folder — active.",
+      "active": false
+    },
+    "Saturn": {
+      "_comment": "Sega Saturn folder — active.",
+      "active": true,
+      "priority": 11
+    },
+    "SNES": {
+      "_comment": "Super Nintendo (SNES) folder — active.",
+      "active": true,
+      "priority": 5
+    },
+    "Wii": {
+      "_comment": "Nintendo Wii folder — active.",
+      "active": false
+    }
+  },
+  "defaults": {
+    "_comment": "Global defaults applied when CLI or per-folder settings do not override them.",
+    "detect_existing": true,
+    "pre_scan": true,
+    "extract_files": null,
+    "section_priority": [
+      "L",
+      "M",
+      "K",
+      "O"
+    ],
+    "delete_duplicates": false,
+    "auto_confirm_delete": false
+  },
+  "limits": {
+    "_comment": "Tuning limits for local indexing and fuzzy matching.",
+    "index_max_files": 20000,
+    "match_threshold": 0.75
+  },
+  "network": {
+    "_comment": "Network and retry tuning: delays are [min, max] in seconds.",
+    "delay_between_page_requests": [
+      1,
+      2
+    ],
+    "delay_between_downloads": [
+      1,
+      2
+    ],
+    "retry_delay": 5,
+    "max_retries": 3
+  }
+}
