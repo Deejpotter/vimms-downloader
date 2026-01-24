@@ -16,6 +16,29 @@ This file tracks the work planned and completed for this repository. Keep the mo
 
 ---
 
+Feature: Popularity categorization & Web UI (new)
+
+- [x] (Completed) Implement popularity scraper & CLI to categorize downloads into star buckets — 2026-01-24
+  - substeps:
+    - added `src/metadata.py` with `get_game_popularity` extraction and caching
+    - added CLI `scripts/categorize_by_popularity.py` (dry-run and apply modes)
+    - added tests for HTML scraping and mapping (`tests/test_popularity_scrape.py`)
+    - added caching support (`ROMs/metadata_cache.json` in ROMs folders)
+    - integration into post-download implemented (moved files to `ROMs/stars/<n>/`)
+- [~] (In Progress) Implement a local Web UI (FastAPI) to browse games and queue downloads — started 2026-01-24
+  - substeps:
+    - small internal API exposing sections, games, presence, and queue actions (scaffolded in `src/webapp.py`) ✅
+    - FastAPI server `src/webapp.py` and templates/static assets (basic template added `src/webui_templates/index.html`) ✅
+    - background worker for queued downloads (simple in-memory worker added) ✅
+    - tests for endpoints and queue behavior (added basic TestClient tests; requires FastAPI installed to run)
+
+---
+
+Planned cleanup & simplification (detailed plan)
+
+
+---
+
 Planned cleanup & simplification (detailed plan)
 
 Priority A — Safe, low-risk, high-value (implement first)

@@ -18,11 +18,11 @@ How to run (developer workflow) 🔧
 - Dry-run the runner (safe):
   python run_vimms.py --dry-run
 
-- Run a single console folder (non-interactive):
-  python run_vimms.py --folder "DS" --no-prompt --extract-files
+- Run a single console folder (non-interactive by default):
+  python run_vimms.py --folder "DS" --extract-files # add `--prompt` to enable prompts
 
 - Run the canonical downloader directly (for a folder):
-  python download_vimms.py --folder "C:/path/to/DS" --no-prompt
+  python download_vimms.py --folder "C:/path/to/DS" # add `--prompt` to enable prompts
 
 Key files & patterns (what to look at) 🔍
 

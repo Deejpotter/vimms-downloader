@@ -77,7 +77,7 @@ python "g:/My Drive/Games/run_vimms.py" --apply
 - Run a single folder immediately:
 
 ```bash
-python "g:/My Drive/Games/run_vimms.py" --folder "G:/My Drive/Games/GBA" --apply --no-prompt
+python "g:/My Drive/Games/run_vimms.py" --folder "G:/My Drive/Games/GBA" --apply --no-prompt  # legacy example; use no flag for non-interactive by default or --prompt to enable prompts
 ```
 
 ## Per-folder file fallback
@@ -99,6 +99,41 @@ The runner will use the top-level mapping if present; otherwise it will fall bac
 - Use `folders` mapping for clarity and central control.
 - Start with a dry-run (`--apply` omitted) to ensure you won't start downloads unexpectedly.
 - Tune `limits.match_threshold` and `limits.index_max_files` if detection is too aggressive or indexing takes too long.
+
+## Web UI (experimental)
+
+- A minimal FastAPI-based web UI is scaffolded at `src/webapp.py` (requires `fastapi`, `uvicorn`, `jinja2`).
+
+### Starting the UI
+- Recommended command (works cross-shell):
+  - Activate your venv then run:
+
+    python -m uvicorn src.webapp:app --reload --port 8000
+
+  - On Windows you can also run the packaged uvicorn binary:
+
+    .venv\Scripts\uvicorn.exe src.webapp:app --reload --port 8000
+
+- The UI will be available at `http://127.0.0.1:8000/`.
+
+### What the UI provides (MVP)
+- Initialize a downloader for a local folder (click **Init** after specifying the folder path).
+- Browse sections (A..Z, number), view game details (title + raw popularity score & votes), and queue games for download.
+- Monitor the queue and see recent processed items (success/failure timestamps).
+
+### Persistence & files
+- Queue is persisted to `src/webui_queue.json` so it survives restarts.
+- Processed tasks (recent history) saved to `src/webui_processed.json`.
+- Per-folder downloader logs are written to `ROMs/vimms_downloader.log` inside each target folder.
+
+### Popularity categorization & score mode
+- You can categorize downloads either by `stars` (1–5) or by raw integer `score` (0–10):
+  - CLI: `scripts/categorize_by_popularity.py --mode stars|score` (use `--dry-run` first).
+  - Downloader CLI: pass `--categorize-by-popularity` and `--categorize-by-popularity-mode score` to automatically move downloaded files into `ROMs/score/<n>/` or `ROMs/stars/<n>/`.
+
+### Notes & next steps
+- The current UI uses polling for queue/processed refresh; real-time progress via SSE/WebSocket is planned for a follow-up.
+- The server binds to localhost only by default. If you need remote access, we should add authentication and an explicit bind option.
 
 ## License
 

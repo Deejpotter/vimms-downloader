@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Vimms Downloader UI</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px }
+    .section { margin-bottom: 1em }
+    .game { margin-left: 1em }
+  </style>
+</head>
+<body>
+  <h1>Vimms Downloader UI (MVP)</h1>
+  <div>
+    <label>Folder: <input id="folder" value="./ROMs" size="50"></label>
+    <button id="init">Init</button>
+    <div id="console_list" style="margin-top:8px"></div>
+  </div>
+  <h2>Sections</h2>
+  <div id="sections"></div>
+  <h2>Games</h2>
+  <div id="games"></div>
+  <h2>Queue</h2>
+  <div id="queue"></div>
+  <h2>Processed</h2>
+  <div id="processed"></div>
+
+  <script>
+    async function init() {
+      const folder = document.getElementById('folder').value;
+      const r = await fetch('/api/init', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({folder})});
+      const j = await r.json();
+      console.log(j);
+      if(j.status === 'root'){
+        // show console candidates for user to pick
+        const cl = document.getElementById('console_list');
+        cl.innerHTML = '<strong>Detected consoles:</strong> ';
+        for(const c of j.consoles){
+          const btn = document.createElement('button');
+          btn.textContent = c;
+          btn.onclick = () => {
+            document.getElementById('folder').value = j.root + '/' + c;
+            // auto-init the specific console folder
+            init();
+          };
+          cl.appendChild(btn);
+        }
+        return;
+      }
+      loadSections();
+      loadQueue();
+      loadProcessed();
+      setInterval(loadQueue, 3000);
+      setInterval(loadProcessed, 5000);
+    }
+
+    async function loadSections() {
+      const r = await fetch('/api/sections');
+      const j = await r.json();
+      const sdiv = document.getElementById('sections');
+      sdiv.innerHTML = '';
+      for (const s of j.sections) {
+        const btn = document.createElement('button');
+        btn.textContent = s;
+        btn.onclick = () => loadSection(s);
+        sdiv.appendChild(btn);
+      }
+    }
+
+    async function loadSection(s) {
+      const folder = document.getElementById('folder').value;
+      const r = await fetch(`/api/section/${s}?folder=${encodeURIComponent(folder)}`);
+      const j = await r.json();
+      const gdiv = document.getElementById('games');
+      gdiv.innerHTML = '';
+      for (const g of j.games) {
+        const d = document.createElement('div');
+        d.className = 'game';
+        d.textContent = g.name + ` (id=${g.game_id}) `;
+        const detail = document.createElement('button');
+        detail.textContent = 'Details';
+        detail.onclick = async () => {
+          const r2 = await fetch(`/api/game/${g.game_id}?folder=${encodeURIComponent(folder)}`);
+          const info = await r2.json();
+          alert(JSON.stringify(info, null, 2));
+        };
+        const b = document.createElement('button');
+        b.textContent = 'Queue';
+        b.onclick = async () => {
+          const res = await fetch('/api/queue', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({folder: folder, game: g})});
+          const j = await res.json();
+          alert(JSON.stringify(j));
+        };
+        d.appendChild(detail);
+        d.appendChild(b);
+        gdiv.appendChild(d);
+      }
+    }
+
+    document.getElementById('init').addEventListener('click', init);
+    loadSections();
+
+    async function loadQueue(){
+      const r = await fetch('/api/queue');
+      const j = await r.json();
+      const qdiv = document.getElementById('queue');
+      qdiv.innerHTML = '';
+      for(const it of j.queue){
+        const el = document.createElement('div');
+        el.textContent = JSON.stringify(it);
+        qdiv.appendChild(el);
+      }
+    }
+
+    async function loadProcessed(){
+      const r = await fetch('/api/processed');
+      const j = await r.json();
+      const pdiv = document.getElementById('processed');
+      pdiv.innerHTML = '';
+      for(const it of j.processed || []){
+        const el = document.createElement('div');
+        el.textContent = `${it.timestamp} ${JSON.stringify(it)}`;
+        pdiv.appendChild(el);
+      }
+    }
+  </script>
+</body>
+</html>

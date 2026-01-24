@@ -117,7 +117,7 @@ MAX_RETRIES = 3                       # Maximum number of retry attempts
 class VimmsDownloader:
     """Main downloader class for Vimm's Lair"""
     
-    def __init__(self, download_dir: str, system: str, progress_file: str = "download_progress.json", detect_existing: bool = True, delete_duplicates: bool = False, auto_confirm_delete: bool = False, pre_scan: bool = True, extract_files: Optional[bool] = None, section_priority_override: Optional[List[str]] = None, project_root: Optional[str] = None):
+    def __init__(self, download_dir: str, system: str, progress_file: str = "download_progress.json", detect_existing: bool = True, delete_duplicates: bool = False, auto_confirm_delete: bool = False, pre_scan: bool = True, extract_files: Optional[bool] = None, section_priority_override: Optional[List[str]] = None, project_root: Optional[str] = None, allow_prompt: bool = False, categorize_by_popularity: bool = False, categorize_by_popularity_mode: str = 'stars'):
         """
         Initialize the downloader
         
@@ -168,6 +168,19 @@ class VimmsDownloader:
         else:
             self.extract_files = bool(extract_files)
 
+        # Whether to categorize downloaded files into star buckets by popularity
+        cfg_cat = cfg.get('defaults', {}).get('categorize_by_popularity', None)
+        if categorize_by_popularity is None:
+            self.categorize_by_popularity = bool(cfg_cat) if cfg_cat is not None else False
+        else:
+            self.categorize_by_popularity = bool(categorize_by_popularity)
+
+        # Categorization mode: 'stars' or 'score'
+        cfg_cat_mode = cfg.get('defaults', {}).get('categorize_by_popularity_mode', None)
+        if categorize_by_popularity_mode is None:
+            self.categorize_by_popularity_mode = cfg_cat_mode if cfg_cat_mode in ('stars', 'score') else 'stars'
+        else:
+            self.categorize_by_popularity_mode = categorize_by_popularity_mode if categorize_by_popularity_mode in ('stars', 'score') else 'stars'
         # Keep the inverse property for compatibility with older naming in code paths
         self.keep_archives = not self.extract_files
 
@@ -185,6 +198,8 @@ class VimmsDownloader:
         self.session = requests.Session()
         # Optional override for section ordering (list of section codes, e.g., ['D','L','C'])
         self.section_priority_override = section_priority_override
+        # Whether to allow interactive prompts inside the downloader (default False)
+        self.allow_prompt = bool(allow_prompt)
         # Set up a per-download-directory logger to capture detailed events
         try:
             log_path = self.download_dir / 'vimms_downloader.log'
@@ -571,6 +586,48 @@ class VimmsDownloader:
 
     def _confirm_and_remove_duplicates(self, keep: Path, extras: List[Path]):
         """Prompt to remove `extras`, moving them to a backup folder if confirmed."""
+
+    def _categorize_downloaded_file(self, filepath: Path, game_id: str) -> None:
+        """Categorize a downloaded file into a star bucket folder based on Vimm popularity.
+
+        Moves the file into `ROMs/stars/<n>/` where <n> is 1..5.
+        """
+        try:
+            from src.metadata import get_game_popularity, score_to_stars
+        except Exception:
+            # Fallback import path
+            from metadata import get_game_popularity, score_to_stars
+
+        url = f"https://vimm.net/vault/{game_id}"
+        pop = get_game_popularity(url, session=self.session, cache_path=self.download_dir / 'metadata_cache.json', logger=getattr(self, 'logger', None))
+        if not pop:
+            if getattr(self, 'logger', None):
+                self.logger.info(f"No popularity data for {game_id}; skipping categorization")
+            return
+        score, votes = pop
+        if self.categorize_by_popularity_mode == 'score':
+            # bucket by rounded integer score (0..10)
+            bucket = int(round(score))
+            dst = self.download_dir / f"score/{bucket}"
+            label = f"score/{bucket}"
+        else:
+            stars = score_to_stars(score)
+            dst = self.download_dir / f"stars/{stars}"
+            label = f"stars/{stars}"
+
+        dst.mkdir(parents=True, exist_ok=True)
+        target = dst / filepath.name
+        try:
+            shutil.move(str(filepath), str(target))
+            if getattr(self, 'logger', None):
+                self.logger.info(f"Categorized {filepath} -> {target} (score={score}, votes={votes})")
+            else:
+                print(f"  ➤ Categorized: {filepath.name} -> {label}/")
+        except Exception as e:
+            if getattr(self, 'logger', None):
+                self.logger.exception(f"Could not move file to stars folder: {e}")
+            else:
+                print(f"  ✗ Could not categorize file: {e}")
         root = self.project_root
         backup_root = root / 'scripts' / 'deleted_duplicates'
         backup_root.mkdir(parents=True, exist_ok=True)
@@ -675,10 +732,20 @@ class VimmsDownloader:
         game_name = game['name']
         game_id = game['game_id']
         
-        # Check if already downloaded
+        # Check if already recorded as downloaded; verify presence to catch manual deletions
         if game_id in self.progress['completed']:
-            print(f"  ⏭️  Skipping '{game_name}' (already downloaded)")
-            return True  # Return True but mark as "skipped" so we don't delay
+            matches = self.find_all_matching_files(game_name)
+            if matches:
+                print(f"  ⏭️  Skipping '{game_name}' (already downloaded)")
+                return True  # Return True but mark as "skipped" so we don't delay
+            else:
+                print(f"  ⚠️  Previously recorded as downloaded but no local file present; will re-download '{game_name}'")
+                try:
+                    self.progress['completed'].remove(game_id)
+                except ValueError:
+                    pass
+                self._save_progress()
+                # proceed with download flow
         
         print(f"\n🎮 Processing: {game_name}")
         
@@ -884,6 +951,13 @@ class VimmsDownloader:
                 self.progress['total_downloaded'] += 1
                 self._save_progress()
 
+                # Optionally categorize the downloaded file by popularity
+                if self.categorize_by_popularity:
+                    try:
+                        self._categorize_downloaded_file(filepath, game_id)
+                    except Exception:
+                        if getattr(self, 'logger', None):
+                            self.logger.exception(f'Failed to categorize downloaded file {filepath} for {game_id}')
                 # Respect configured delay between downloads
                 self._random_delay(self.delay_between_downloads)
 
@@ -937,7 +1011,11 @@ class VimmsDownloader:
         print("   This process will take a long time. You can stop and resume anytime.")
         print("\n" + "=" * 80)
         
-        input("\nPress Enter to start downloading...")
+        # Interactive prompt is disabled by default. If enabled, prompt before starting.
+        if getattr(self, 'allow_prompt', False):
+            input("\nPress Enter to start downloading...")
+        else:
+            print("\n(Non-interactive run — proceeding without prompting)")
         
         start_time = datetime.now()
         total_games_processed = 0
@@ -1000,9 +1078,23 @@ class VimmsDownloader:
                 # Walk titles until we find the first that does NOT match any local file
                 for i, g in enumerate(games):
                     gid = g.get('game_id')
-                    # If already recorded as completed in progress, skip it
+                    # If already recorded as completed in progress, verify presence
                     if gid in self.progress.get('completed', []):
-                        continue
+                        matches = self.find_all_matching_files(g['name'])
+                        if matches:
+                            # Still present locally — skip it
+                            continue
+                        else:
+                            # Previously marked as completed but local file missing -> treat as missing
+                            print(f"  ⚠️  Previously recorded as completed but local file missing for '{g['name']}' (id={gid}); re-downloading")
+                            try:
+                                self.progress['completed'].remove(gid)
+                            except ValueError:
+                                pass
+                            self._save_progress()
+                            # Found the first missing title — start downloads at this index
+                            section_start_idx = i
+                            break
 
                     matches = self.find_all_matching_files(g['name'])
                     if matches:
@@ -1126,13 +1218,15 @@ def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(description="Vimm's Lair downloader — run for a specific folder")
     parser.add_argument('--folder', '-f', help='Path to the target folder to run the downloader in (overrides auto-detect)')
-    parser.add_argument('--no-prompt', action='store_true', help='Do not prompt before starting downloads')
+    parser.add_argument('--prompt', action='store_true', help='Allow interactive prompts (default: non-interactive)')
     parser.add_argument('--section-priority', type=str, help='Comma-separated section order (e.g. "D,L,C") to prioritize specific sections first')
     parser.add_argument('--no-detect-existing', action='store_true', help='Do not attempt to detect local ROM files and skip them')
     parser.add_argument('--no-pre-scan', action='store_true', help='Do not pre-scan the target folder for local ROM files (use per-item checks)')
     parser.add_argument('--extract-files', action='store_true', help='Extract archive files after download (default: only DS extracts unless overridden)')
     parser.add_argument('--delete-duplicates', action='store_true', help='When multiple local matches are found for a title, offer to remove redundant files (prompts per-title)')
     parser.add_argument('--yes-delete', action='store_true', help='Auto-confirm deletion of duplicates (use with caution)')
+    parser.add_argument('--categorize-by-popularity', action='store_true', help='Move downloaded files into stars/<n> or score/<n> based on Vimm popularity (uses metadata cache)')
+    parser.add_argument('--categorize-by-popularity-mode', choices=['stars','score'], default='stars', help='Categorization mode: stars (default) or score (integer)')
     parser.add_argument('--src', help='Path to the project/src root where `vimms_config.json` and scripts live (useful when running from a different CWD)')
     args = parser.parse_args()
 
@@ -1192,10 +1286,9 @@ def main():
         roms_dir = script_dir
 
     # Create downloader
-    # Only prompt to start when the user has not explicitly requested non-interactive mode.
-    # The runner (`run_vimms.py`) forwards `--no-prompt` when non-interactive behavior is desired.
-    if not args.no_prompt:
-        input("\nPress Enter to start downloading. ..")
+    # By default the downloader is non-interactive. Use `--prompt` to allow interactive prompts.
+    if args.prompt:
+        input("\nPress Enter to start downloading...")
 
     downloader = VimmsDownloader(
         download_dir=str(roms_dir),
@@ -1206,21 +1299,15 @@ def main():
         delete_duplicates=args.delete_duplicates,
         auto_confirm_delete=args.yes_delete,
         section_priority_override=sections_override,
+        allow_prompt=args.prompt,
+        categorize_by_popularity=args.categorize_by_popularity,
     )
 
     # Start downloading
     try:
-        # If --no-prompt was given, skip the interactive confirmation inside the downloader
-        if args.no_prompt:
-            import builtins
-            original_input = builtins.input
-            try:
-                builtins.input = lambda *a, **k: ''
-                downloader.download_all_games()
-            finally:
-                builtins.input = original_input
-        else:
-            downloader.download_all_games()
+        # If interactive prompts are allowed, run normally (prompts will be emitted).
+        # Otherwise run non-interactively (default behavior).
+        downloader.download_all_games()
     except KeyboardInterrupt:
         print("\n\n⏸️  Download interrupted by user.")
         print("   Progress has been saved. Run the script again to resume.")

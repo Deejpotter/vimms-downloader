@@ -17,7 +17,7 @@ Running downloads 🔧
 
 - Preferred entrypoint: `run_vimms.py`.
   - Example: `python run_vimms.py --folder "G:/My Drive/Games/PS2"`
-  - Pass `--no-prompt` to run non-interactively.
+  - By default runner/downloader are non-interactive. Use `--prompt` to allow interactive prompts.
   - Pass `--no-detect-existing` to disable fuzzy-local-file detection (force downloads).
     - Pass `--delete-duplicates` to enable prompting to remove redundant local files when multiple matches are found.
     - Add `--yes-delete` to auto-confirm deletion of duplicates (use with caution; duplicates are moved to `scripts/deleted_duplicates/` timestamped folders).
@@ -68,3 +68,30 @@ or automated cleaning of filenames before detection), I can implement that quick
 ---
 Updated: added fuzzy-local-file detection and `--no-detect-existing` flag; consolidated
 canonical scripts at workspace root.
+
+New utilities
+
+- `scripts/categorize_by_popularity.py` — Categorize your downloaded ROMs into buckets based on Vimm popularity. Run in dry-run mode first to preview moves:
+  - `python scripts/categorize_by_popularity.py --folder G:/Games/DS --dry-run`
+  - Two modes are supported with `--mode`: `stars` (default) buckets into `ROMs/stars/<n>/` (1..5) or `score` buckets into `ROMs/score/<n>/` (rounded 0..10).
+  - Example (score mode apply): `python scripts/categorize_by_popularity.py --folder G:/Games/DS --apply --mode score`
+
+- Experimental Web UI (FastAPI) — local web interface to browse sections, view popularity, queue games and monitor processed tasks.
+  - Start the server (preferred, cross-shell):
+    - Activate venv and run: `python -m uvicorn src.webapp:app --reload --port 8000`
+    - Or on Windows use the bundled script: `.venv\Scripts\uvicorn.exe src.webapp:app --reload --port 8000`
+  - By default the UI listens on http://127.0.0.1:8000/ (open in your browser).
+  - UI basics:
+    - Set the folder path (console folder) in the Folder field and click **Init** to initialize a downloader instance for that folder.
+    - Click a section (A, B, C, ...) to list games. Use **Details** to view the game's title and raw popularity data (score, votes) and **Queue** to queue it for download.
+    - The UI shows the current queue and a list of recently processed tasks.
+  - Persistence & files:
+    - The in-memory queue is saved to `src/webui_queue.json` so queued jobs survive server restarts.
+    - Processed task history is saved to `src/webui_processed.json` and visible via the UI.
+  - Server logs and per-folder downloader logs:
+    - UI process logs appear in the terminal running uvicorn.
+    - Per-folder downloader logs are written to `ROMs/vimms_downloader.log` in the target folder.
+
+Notes:
+- The Web UI is experimental and intended for local use only (binds to localhost). If you want real-time progress bars or authentication, I can add SSE/WebSocket and auth in a follow-up.
+

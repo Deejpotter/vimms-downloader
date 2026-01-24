@@ -35,6 +35,7 @@ from pathlib import Path
 import sys
 import json
 from datetime import datetime
+import os
 
 ROOT = Path(__file__).parent
 
@@ -102,6 +103,7 @@ def resolve_target(folder_arg: str, root: Path) -> Path:
             pass
 
         print(f"Target folder does not exist: {target}")
+        print(f"Searched under root: {root}")
         if suggestions:
             print("Did you mean one of:")
             for s in suggestions:
@@ -209,7 +211,70 @@ def main(argv=None):
     except Exception:
         cfg_src_root = None
 
-    runtime_root = Path(args.src).resolve() if args.src else (Path(cfg_src_root).resolve() if cfg_src_root else ROOT)
+    runtime_root = None
+    def _normalize_src_candidates(src: str):
+        """Yield likely filesystem candidates from a variety of input forms (Git-Bash, /mnt, mixed slashes)."""
+        import re
+        src_expanded = os.path.expanduser(os.path.expandvars(src))
+        candidates = [src_expanded]
+        # Convert backslashes to forward slashes
+        if '\\' in src_expanded:
+            candidates.append(src_expanded.replace('\\', '/'))
+        # Fix drive-letter with missing slash: 'G:Games' -> 'G:/Games'
+        m = re.match(r'^([A-Za-z]):([^/\\].*)$', src_expanded)
+        if m:
+            candidates.append(f"{m.group(1)}:/{m.group(2)}")
+        # /g/path or /G/path -> G:/path
+        m2 = re.match(r'^/([A-Za-z])(.*)$', src_expanded)
+        if m2:
+            candidates.append(f"{m2.group(1).upper()}:{m2.group(2)}")
+            candidates.append(f"{m2.group(1).upper()}:/{m2.group(2).lstrip('/')}" )
+        # /mnt/g/path -> G:/path
+        m3 = re.match(r'^/mnt/([A-Za-z])(.*)$', src_expanded)
+        if m3:
+            candidates.append(f"{m3.group(1).upper()}:{m3.group(2)}")
+            candidates.append(f"{m3.group(1).upper()}:/{m3.group(2).lstrip('/')}" )
+        # Ensure unique, preserve order
+        seen = set()
+        out = []
+        for c in candidates:
+            if c not in seen:
+                seen.add(c)
+                out.append(c)
+        return out
+
+    if args.src:
+        proposed_raw = args.src
+        tried = []
+        found = None
+        for cand in _normalize_src_candidates(proposed_raw):
+            p = Path(cand)
+            tried.append(str(p))
+            if p.exists() and p.is_dir():
+                found = p.resolve()
+                break
+        if found is None:
+            print(f"Warning: provided --src path does not exist: {args.src}")
+            print("Tip: use an absolute path (e.g., 'G:/Games') or verify the drive is accessible.")
+            print("If you're using Git Bash, try '/g/Games' or '/mnt/g/Games'.")
+            print("Check that the drive is mounted and accessible from this shell (try 'ls G:/' or PowerShell 'dir G:\\').")
+            print('Tried the following candidates:')
+            for t in tried:
+                print(f"  - {t}")
+            # Fall back to repo ROOT to avoid surprising failures
+            runtime_root = ROOT
+        else:
+            # Inform user we normalized/selected a candidate
+            if str(found) != str(args.src):
+                print(f"Note: normalized --src {args.src} -> {found}")
+            runtime_root = found
+    elif cfg_src_root:
+        try:
+            runtime_root = Path(cfg_src_root).resolve()
+        except Exception:
+            runtime_root = ROOT
+    else:
+        runtime_root = ROOT
 
     if args.folder:
         target = resolve_target(args.folder, runtime_root)
@@ -303,22 +368,21 @@ def main(argv=None):
     # Read top-level defaults from the config (if present)
     top_defaults = cfg.get('defaults', {}) if isinstance(cfg, dict) else {}
 
-    # Decide default prompting behavior. The user's request: runner should NOT prompt by
-    # default unless the config explicitly allows prompting. We'll support a top-level
-    # `defaults.allow_prompt` boolean (False => non-interactive by default).
+    # Determine default prompting behavior. The user's preference is non-interactive by
+    # default unless `defaults.allow_prompt` is set in the config or the CLI `--prompt` is used.
     default_allow_prompt = bool(top_defaults.get('allow_prompt', False))
-    default_no_prompt = not default_allow_prompt
+    default_prompt = bool(top_defaults.get('allow_prompt', False))
 
     # Build the set of common forwarded flags (these act as global defaults; per-folder
     # config and CLI flags may override on a per-folder basis).
     global_forward = {}
-    # Determine global no-prompt with precedence: CLI (--prompt/--no-prompt) > top-level default
+    # Determine global prompt with precedence: CLI (--prompt/--no-prompt) > top-level default
     if args.prompt:
-        global_forward['no_prompt'] = False
+        global_forward['prompt'] = True
     elif args.no_prompt:
-        global_forward['no_prompt'] = True
+        global_forward['prompt'] = False
     else:
-        global_forward['no_prompt'] = default_no_prompt
+        global_forward['prompt'] = default_prompt
 
     global_forward['extract_files'] = args.extract_files
     global_forward['delete_duplicates'] = args.delete_duplicates
@@ -539,22 +603,23 @@ def main(argv=None):
         # Effective prompting behavior for this folder
         # Check explicit CLI overrides first
         if args.prompt:
-            effective_no_prompt = False
+            effective_prompt = True
         elif args.no_prompt:
-            effective_no_prompt = True
+            effective_prompt = False
         else:
             # Next check per-folder config for explicit keys. Support both `no_prompt` (bool)
             # and `allow_prompt` (bool) for backwards/forward compatibility.
             if 'no_prompt' in per_cfg:
-                effective_no_prompt = bool(per_cfg.get('no_prompt'))
+                effective_prompt = not bool(per_cfg.get('no_prompt'))
             elif 'allow_prompt' in per_cfg:
-                effective_no_prompt = not bool(per_cfg.get('allow_prompt'))
+                effective_prompt = bool(per_cfg.get('allow_prompt'))
             else:
                 # Fall back to global default decided from top-level `defaults`.
-                effective_no_prompt = global_forward.get('no_prompt', default_no_prompt)
+                effective_prompt = global_forward.get('prompt', default_prompt)
 
-        if effective_no_prompt:
-            flags.append('--no-prompt')
+        # Forward prompt flag to downloader when interactive behavior is desired
+        if effective_prompt:
+            flags.append('--prompt')
 
         # extract_files: per-folder true -> add flag; CLI --extract-files overrides
         if global_forward.get('extract_files'):

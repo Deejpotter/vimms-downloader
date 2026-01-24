@@ -1,5 +1,5 @@
 import pytest
-from clean_filenames import clean_filename
+from src.clean_filenames import clean_filename
 
 @pytest.mark.parametrize("orig, expected", [
     ("005 4426__MY_GAME_(EU).nds", "MY Game.nds"),
