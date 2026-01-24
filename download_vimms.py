@@ -46,6 +46,8 @@ import urllib3
 import logging
 from logging.handlers import RotatingFileHandler
 from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
+from downloader_lib.fetch import fetch_section_page, fetch_game_page
+from downloader_lib.parse import parse_games_from_section, resolve_download_form
 
 # Disable SSL warnings
 urllib3.disable_warnings()
@@ -342,67 +344,22 @@ class VimmsDownloader:
         print(f"\n📋 Fetching game list for section '{section}'...")
         
         while True:
-            section_url = f"{VAULT_BASE}/?p=list&action=filters&system={self.system}&section={section}&page={page_num}"
-            
             try:
-                headers = {
-                    'User-Agent': self._get_random_user_agent(),
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                }
+                response = fetch_section_page(self.session, self.system, section, page_num)
+                games_on_page = parse_games_from_section(response.text, section)
                 
-                response = self.session.get(section_url, headers=headers, verify=False)
-                response.raise_for_status()
+                if not games_on_page:
+                    break
+                
+                games.extend(games_on_page)
                 
                 soup = BeautifulSoup(response.content, 'html.parser')
-                table = soup.find('table', {'class': 'rounded centered cellpadding1 hovertable striped'})
-                
-                if not table:
-                    # No table means no more games
-                    break
-                
-                rows = table.find_all('tr')
-                games_on_page = 0
-                
-                for row in rows:
-                    first_td = row.find('td')
-                    if first_td:
-                        link = first_td.find('a')
-                        if link:
-                            name = link.text.strip()
-                            href = link.get('href')
-                            # Skip entries with no href
-                            if not href:
-                                continue
-                            # Some parsers may return list-like attribute values; normalize to a string
-                            if isinstance(href, (list, tuple)):
-                                href = href[0]
-                            href = str(href)
-                            game_id = href.split('/')[-1]
-                            page_url = BASE_URL + href
-                            
-                            games.append({
-                                'name': name,
-                                'page_url': page_url,
-                                'game_id': game_id,
-                                'section': section
-                            })
-                            games_on_page += 1
-                
-                if games_on_page == 0:
-                    # No games found on this page, we're done
-                    break
-                
-                # Check if there's a "next page" link
-                # Use 'text' (accepts regex Pattern[str]) to satisfy type checkers
                 next_link = soup.find('a', text=re.compile(r'Next', re.IGNORECASE))
                 if not next_link:
-                    # No next page, we're done
                     break
-                
-                print(f"  ✓ Page {page_num}: Found {games_on_page} games")
+
+                print(f"  ✓ Page {page_num}: Found {len(games_on_page)} games")
                 page_num += 1
-                
-                # Small delay between page requests (configurable)
                 self._random_delay(self.delay_between_page_requests)
                 
             except Exception as e:
@@ -657,112 +614,8 @@ class VimmsDownloader:
             Download URL or None if not found
         """
         try:
-            headers = {
-                'User-Agent': self._get_random_user_agent(),
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Referer': VAULT_BASE
-            }
-            
-            response = self.session.get(game_page_url, headers=headers, verify=False)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Prefer using the form's action (host-specific) when present,
-            # falling back to a generic dl host only if necessary.
-            # 1) Try form with id='dl_form' (typical)
-            dl_form = soup.find(id='dl_form') or soup.find('form', attrs={'id': 'dl_form'})
-
-            media_id = None
-            if dl_form:
-                # Find mediaId (case-insensitive) hidden input
-                media_input = dl_form.find('input', attrs={'name': 'mediaId'}) or dl_form.find('input', attrs={'name': re.compile(r'^mediaId$', re.I)})
-                if media_input:
-                    media_id = media_input.get('value')
-
-                action = (dl_form.get('action') or '').strip()
-                method = (dl_form.get('method') or 'get').lower()
-
-                # Build params from hidden inputs (GET style) to match site expectations
-                params = {}
-                for inp in dl_form.find_all('input'):
-                    n = inp.get('name')
-                    if not n:
-                        continue
-                    v = inp.get('value')
-                    if v is None:
-                        continue
-                    params[n] = v
-
-                # Ensure mediaId is present when we detected it
-                if media_id and 'mediaId' not in params:
-                    params['mediaId'] = media_id
-
-                if action:
-                    # Resolve relative actions against BASE_URL
-                    action_url = urljoin(BASE_URL + '/', action)
-                    method = (dl_form.get('method') or 'get').lower()
-
-                    # Merge existing query with params (for GET-style forms)
-                    parsed = urlparse(action_url)
-                    q = parse_qs(parsed.query)
-                    # Flatten values; prioritize params dict
-                    for k, v in list(q.items()):
-                        if k not in params and isinstance(v, list) and v:
-                            params[k] = v[-1]
-
-                    if method == 'get':
-                        new_q = urlencode(params, doseq=False)
-                        action_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_q, parsed.fragment))
-
-                        if getattr(self, 'logger', None):
-                            self.logger.info(f"Resolved download URL via form action (GET) for {game_id}: {action_url}")
-                        return action_url
-                    else:
-                        # POST forms: submit the form server-side to obtain final redirect URL
-                        try:
-                            headers_post = {
-                                'User-Agent': self._get_random_user_agent(),
-                                'Referer': game_page_url
-                            }
-                            if getattr(self, 'logger', None):
-                                self.logger.info(f"Submitting POST form to {action_url} for {game_id} with params {params}")
-                            resp = self.session.post(action_url, data=params, headers=headers_post, verify=False, allow_redirects=True)
-                            # If post results in a redirect or final URL, return it
-                            if resp is not None and getattr(resp, 'url', None):
-                                if getattr(self, 'logger', None):
-                                    self.logger.info(f"POST form resolved to URL for {game_id}: {resp.url}")
-                                return resp.url
-                        except Exception:
-                            # Fallback to returning the action_url with query params appended
-                            new_q = urlencode(params, doseq=False)
-                            action_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_q, parsed.fragment))
-                            if getattr(self, 'logger', None):
-                                self.logger.exception(f"POST form submission failed for {game_id}, falling back to GET-like URL: {action_url}")
-                            return action_url
-
-            # 2) Try to find a direct link with mediaId in anchors (some pages expose it)
-            a = soup.find('a', href=re.compile(r'mediaId=', re.IGNORECASE))
-            if a and a.get('href'):
-                href = a.get('href')
-                # Resolve relative against BASE_URL
-                resolved = urljoin(BASE_URL + '/', href)
-                if getattr(self, 'logger', None):
-                    self.logger.info(f"Resolved download URL via anchor for {game_id}: {resolved}")
-                return resolved
-
-            # 3) Fallback to legacy behavior using default host (less reliable on some systems)
-            if not media_id:
-                # As a last resort, try to scrape mediaId from any input by name
-                alt = soup.find('input', attrs={'name': re.compile(r'^mediaId$', re.I)})
-                media_id = alt.get('value') if alt else None
-            if media_id:
-                fallback = f"{DOWNLOAD_BASE}/?mediaId={media_id}"
-                if getattr(self, 'logger', None):
-                    self.logger.info(f"Fallback constructed download URL for {game_id}: {fallback}")
-                return fallback
-            
-            return None
+            response = fetch_game_page(self.session, game_page_url)
+            return resolve_download_form(response.text, self.session, game_page_url, game_id, getattr(self, 'logger', None))
             
         except Exception as e:
             msg = f"Error getting download URL: {e}"
