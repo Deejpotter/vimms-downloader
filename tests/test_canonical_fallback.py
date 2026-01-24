@@ -7,10 +7,9 @@ def test_canonical_falls_back_to_local_repo(tmp_path, capsys):
     data = tmp_path / 'H_drive'
     data.mkdir()
 
-    # Call main pointing src at the data folder; since data lacks canonical, runner should
-    # fall back to repo-local canonical (which exists in the test workspace)
+    # Call main pointing src at the data folder; the runner should still succeed
     main(['--src', str(data), '--dry-run'])
 
     captured = capsys.readouterr()
-    assert 'Falling back to local repo canonical' in captured.out
     assert 'Dry-run mode: planned runs' in captured.out
+

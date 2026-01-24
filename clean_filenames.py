@@ -15,66 +15,12 @@ import re
 from pathlib import Path
 
 
+from utils.filenames import clean_filename as util_clean_filename
+
+
 def clean_filename(filename):
-    """
-    Clean a single filename according to the rules.
-    
-    Args:
-        filename: The original filename (including extension)
-    
-    Returns:
-        The cleaned filename
-    """
-    # Split filename and extension
-    name, ext = os.path.splitext(filename)
-
-    # Step 1: Remove leading numeric prefix pattern like "### ####" which may be
-    # followed by underscores, spaces or hyphens (examples: "005 4426__", "123 4567 - ")
-    name = re.sub(r'^\d{3}\s*\d{4}[_\s-]*', '', name)
-
-    # Step 2: Replace underscores with spaces (common formatting from dumps)
-    name = name.replace('_', ' ')
-
-    # Step 3: Remove region/language tags in parentheses or brackets
-    # Matches patterns like (EU), (USA), (ML), (En,Fr,Es), [Europe], etc.
-    name = re.sub(r'\s*\([^)]*\)\s*', ' ', name)
-    name = re.sub(r"\s*\[[^\]]*\]\s*", ' ', name)
-
-    # Also remove common explicit tags that might not be bracketed
-    name = re.sub(r'\bNDSi\s+Enhanced\b', ' ', name, flags=re.IGNORECASE)
-    
-    # Step 4: Clean up multiple spaces
-    name = re.sub(r'\s+', ' ', name)
-    
-    # Step 5: Trim whitespace
-    name = name.strip()
-    
-    # Step 6: Fix common title casing issues
-    # Convert all-caps words to title case (except small words and acronyms)
-    words = name.split()
-    cleaned_words = []
-    
-    for i, word in enumerate(words):
-        # Keep known acronyms in caps
-        if word.upper() in ['LEGO', 'USA', 'EU', 'UK', 'DS', 'III', 'II', 'I']:
-            cleaned_words.append(word.upper())
-        # Keep small words lowercase unless they're the first word
-        elif i > 0 and word.lower() in ['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on']:
-            cleaned_words.append(word.lower())
-        # If word is all caps and longer than 3 chars, convert to title case
-        elif word.isupper() and len(word) > 3:
-            cleaned_words.append(word.title())
-        else:
-            cleaned_words.append(word)
-    
-    name = ' '.join(cleaned_words)
-    
-    # Step 7: Fix common issues
-    name = name.replace('  ', ' ')  # Double check for double spaces
-    name = name.replace('111', 'III')  # Fix "111" to "III"
-    
-    # Return cleaned name with original extension
-    return name + ext
+    """Thin wrapper that delegates to the canonical cleaning utility."""
+    return util_clean_filename(filename)
 
 
 def preview_changes(directory):

@@ -289,18 +289,16 @@ def main(argv=None):
         sorted_candidates = sorted(run_candidates, key=lambda ci: _folder_priority(ci[0].name, ci[1]))
         run_list = [c[0] for c in sorted_candidates]
 
-    # Resolve canonical downloader path from runtime_root so runner can be used from any cwd
-    canonical = runtime_root / 'download_vimms.py'
+    # Decide which canonical downloader to invoke.
+    # Default behavior: use the repo-local canonical downloader (this runner's script)
+    # because `--src` typically points at a data/download root (e.g., H:/Games).
+    # If the user explicitly requests using external scripts in the src (`--use-external-scripts`),
+    # use the canonical under runtime_root and fail if missing.
+    # Always use the repository-local canonical downloader (this runner's script).
+    canonical = ROOT / 'download_vimms.py'
     if not canonical.exists():
-        # If the runtime_root doesn't contain a canonical downloader, fall back to the
-        # repository-local canonical so users can point --src at a data directory (e.g., H:/Games)
-        fallback = ROOT / 'download_vimms.py'
-        if fallback.exists():
-            print(f"Canonical downloader not found at: {canonical}. Falling back to local repo canonical at {fallback}")
-            canonical = fallback
-        else:
-            print(f"Canonical downloader not found at: {canonical}")
-            raise SystemExit(1)
+        print(f"Repository-local canonical downloader not found at: {canonical}")
+        raise SystemExit(1)
 
     # Read top-level defaults from the config (if present)
     top_defaults = cfg.get('defaults', {}) if isinstance(cfg, dict) else {}

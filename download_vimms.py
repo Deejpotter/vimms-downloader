@@ -102,13 +102,8 @@ SYSTEM_DEFAULT_ARCHIVE_EXT = {
 SECTIONS = ['number', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
             'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
 
-# User agents to rotate (appear as normal browser traffic)
-USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0',
-]
+from utils.constants import ROM_EXTENSIONS, ARCHIVE_EXTENSIONS, USER_AGENTS  # centralized constants
+from utils.filenames import clean_filename as util_clean_filename, normalize_for_match as util_normalize_for_match
 
 # Timing configuration (in seconds)
 DELAY_BETWEEN_PAGE_REQUESTS = (1, 2)  # Random delay between list page requests
@@ -230,66 +225,8 @@ class VimmsDownloader:
         time.sleep(delay)
     
     def _clean_filename(self, filename: str) -> str:
-        """
-        Clean downloaded filename by removing prefixes, tags, and formatting
-        
-        Args:
-            filename: Original filename (including extension)
-            
-        Returns:
-            Cleaned filename
-        """
-        # Split filename and extension
-        name, ext = os.path.splitext(filename)
-        
-        # Skip if already clean
-        if not re.match(r'^\d{3}\s+\d{4}', name) and '_' not in name and '(' not in name:
-            return filename
-        
-        # Remove leading numeric prefix pattern "### #### "
-        name = re.sub(r'^\d{3}\s+\d{4}\s+', '', name)
-        
-        # Replace underscores with spaces
-        name = name.replace('_', ' ')
-        
-        # Remove region/language tags in parentheses or brackets
-        name = re.sub(r'\s*\([^)]*\)\s*', ' ', name)
-        name = re.sub(r"\s*\[[^\]]*\]\s*", ' ', name)
-
-        # Also remove common explicit tags that might not be bracketed (e.g. NDSi Enhanced)
-        name = re.sub(r'\bNDSi\s+Enhanced\b', ' ', name, flags=re.IGNORECASE)
-        
-        # Clean up multiple spaces
-        name = re.sub(r'\s+', ' ', name)
-        
-        # Trim whitespace
-        name = name.strip()
-        
-        # Fix common title casing issues
-        words = name.split()
-        cleaned_words = []
-        
-        for i, word in enumerate(words):
-            # Keep known acronyms in caps
-            if word.upper() in ['LEGO', 'USA', 'EU', 'UK', 'DS', 'III', 'II', 'I', 'NES', 'SNES', 
-                               'GBA', 'GBC', 'PSP', 'PS1', 'PS2', 'PS3', 'N64', 'GC']:
-                cleaned_words.append(word.upper())
-            # Keep small words lowercase unless they're the first word
-            elif i > 0 and word.lower() in ['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on']:
-                cleaned_words.append(word.lower())
-            # If word is all caps and longer than 3 chars, convert to title case
-            elif word.isupper() and len(word) > 3:
-                cleaned_words.append(word.title())
-            else:
-                cleaned_words.append(word)
-        
-        name = ' '.join(cleaned_words)
-        
-        # Fix common issues
-        name = name.replace('  ', ' ')
-        name = name.replace('111', 'III')
-        
-        return name + ext
+        """Delegate to the canonical cleaning utility."""
+        return util_clean_filename(filename)
     
     def _extract_and_cleanup(self, archive_path: Path):
         """
@@ -344,9 +281,8 @@ class VimmsDownloader:
                     # Check if folder contains only 1-2 files (likely just ROM and maybe readme)
                     contents = list(item.iterdir())
                     
-                    # Look for ROM files in the folder (various extensions)
-                    rom_extensions = ['.nds', '.sav', '.n64', '.z64', '.v64', '.iso', '.bin', '.cue', 
-                                     '.gba', '.gbc', '.gb', '.smc', '.sfc', '.nes', '.gcm', '.wbfs']
+                    # Look for ROM files in the folder (use centralized extensions list)
+                    rom_extensions = ROM_EXTENSIONS
                     rom_files = [f for f in contents if f.suffix.lower() in rom_extensions]
                     
                     if rom_files:
@@ -373,8 +309,7 @@ class VimmsDownloader:
                             pass
             
             # Also clean filenames of any ROM files directly in the download directory
-            rom_extensions = ['.nds', '.sav', '.n64', '.z64', '.v64', '.iso', '.bin', '.cue', 
-                             '.gba', '.gbc', '.gb', '.smc', '.sfc', '.nes', '.gcm', '.wbfs']
+            rom_extensions = ROM_EXTENSIONS
             for item in self.download_dir.iterdir():
                 if item.is_file() and item.suffix.lower() in rom_extensions:
                     cleaned_name = self._clean_filename(item.name)
@@ -479,34 +414,8 @@ class VimmsDownloader:
         return games
 
     def _normalize_for_match(self, s: str) -> str:
-        """Normalize a string for fuzzy matching.
-
-        Rationale: when comparing titles we want to remove formatting differences
-        that are not meaningful (file extensions, punctuation, case, and extra
-        whitespace). This increases the chance of matching the same game when
-        filenames aren't identical.
-
-        Steps:
-        1. Remove a trailing extension (e.g., ".nds") because names from Vimm's
-           pages do not include extensions but local files do.
-        2. Replace non-alphanumeric separators with spaces (e.g., underscores, dashes).
-        3. Lowercase and collapse multiple spaces so comparisons are stable.
-        """
-        # Drop a common file extension if present to avoid extension mismatches
-        s = re.sub(r"\.[a-z0-9]{1,5}$", "", s, flags=re.IGNORECASE)
-
-        # Remove region/language tags in parentheses or brackets (e.g., "(EU)", "(USA)")
-        s = re.sub(r"\([^)]*\)", "", s)
-        s = re.sub(r"\[[^\]]*\]", "", s)
-
-        # Replace punctuation with a single space (keeps alphanumerics and spaces)
-        s = re.sub(r"[^A-Za-z0-9 ]+", " ", s)
-
-        # Normalize whitespace and case for stable comparisons
-        s = s.lower().strip()
-        s = re.sub(r"\s+", " ", s)
-
-        return s
+        """Delegate normalization to shared utility for consistent behavior."""
+        return util_normalize_for_match(s)
 
     def _build_local_index(self):
         """Build an in-memory index of local ROM filenames to avoid repeated directory scans.
@@ -589,13 +498,10 @@ class VimmsDownloader:
             Path to the matching local file, or None if nothing matches.
         """
 
-        rom_extensions = [
-            '.nds', '.sav', '.n64', '.z64', '.v64', '.iso', '.bin', '.cue',
-            '.gba', '.gbc', '.gb', '.smc', '.sfc', '.nes', '.gcm', '.wbfs'
-        ]
+        rom_extensions = list(ROM_EXTENSIONS)
         # When keeping archives, consider archives as present matches too
         if not self.extract_files:
-            rom_extensions = rom_extensions + ['.zip', '.7z']
+            rom_extensions = rom_extensions + list(ARCHIVE_EXTENSIONS)
 
         # Use the cleaned, normalized title as the comparison target
         target = self._normalize_for_match(self._clean_filename(game_name))
@@ -646,12 +552,9 @@ class VimmsDownloader:
         `is_game_present` but collects all candidates rather than returning
         the first match.
         """
-        rom_extensions = [
-            '.nds', '.sav', '.n64', '.z64', '.v64', '.iso', '.bin', '.cue',
-            '.gba', '.gbc', '.gb', '.smc', '.sfc', '.nes', '.gcm', '.wbfs'
-        ]
+        rom_extensions = list(ROM_EXTENSIONS)
         if not self.extract_files:
-            rom_extensions = rom_extensions + ['.zip', '.7z']
+            rom_extensions = rom_extensions + list(ARCHIVE_EXTENSIONS)
 
         target = self._normalize_for_match(self._clean_filename(game_name))
         matches: List[Path] = []
@@ -798,19 +701,45 @@ class VimmsDownloader:
                 if action:
                     # Resolve relative actions against BASE_URL
                     action_url = urljoin(BASE_URL + '/', action)
-                    # Merge existing query with params
+                    method = (dl_form.get('method') or 'get').lower()
+
+                    # Merge existing query with params (for GET-style forms)
                     parsed = urlparse(action_url)
                     q = parse_qs(parsed.query)
                     # Flatten values; prioritize params dict
                     for k, v in list(q.items()):
                         if k not in params and isinstance(v, list) and v:
                             params[k] = v[-1]
-                    new_q = urlencode(params, doseq=False)
-                    action_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_q, parsed.fragment))
 
-                    if getattr(self, 'logger', None):
-                        self.logger.info(f"Resolved download URL via form action for {game_id}: {action_url}")
-                    return action_url
+                    if method == 'get':
+                        new_q = urlencode(params, doseq=False)
+                        action_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_q, parsed.fragment))
+
+                        if getattr(self, 'logger', None):
+                            self.logger.info(f"Resolved download URL via form action (GET) for {game_id}: {action_url}")
+                        return action_url
+                    else:
+                        # POST forms: submit the form server-side to obtain final redirect URL
+                        try:
+                            headers_post = {
+                                'User-Agent': self._get_random_user_agent(),
+                                'Referer': game_page_url
+                            }
+                            if getattr(self, 'logger', None):
+                                self.logger.info(f"Submitting POST form to {action_url} for {game_id} with params {params}")
+                            resp = self.session.post(action_url, data=params, headers=headers_post, verify=False, allow_redirects=True)
+                            # If post results in a redirect or final URL, return it
+                            if resp is not None and getattr(resp, 'url', None):
+                                if getattr(self, 'logger', None):
+                                    self.logger.info(f"POST form resolved to URL for {game_id}: {resp.url}")
+                                return resp.url
+                        except Exception:
+                            # Fallback to returning the action_url with query params appended
+                            new_q = urlencode(params, doseq=False)
+                            action_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_q, parsed.fragment))
+                            if getattr(self, 'logger', None):
+                                self.logger.exception(f"POST form submission failed for {game_id}, falling back to GET-like URL: {action_url}")
+                            return action_url
 
             # 2) Try to find a direct link with mediaId in anchors (some pages expose it)
             a = soup.find('a', href=re.compile(r'mediaId=', re.IGNORECASE))

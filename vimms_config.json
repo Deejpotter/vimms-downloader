@@ -30,7 +30,7 @@
     },
     "GC": {
       "_comment": "GameCube (GC) folder — active.",
-      "active": false
+      "active": true
     },
     "Genesis": {
       "_comment": "Sega Genesis / Mega Drive folder — active.",
