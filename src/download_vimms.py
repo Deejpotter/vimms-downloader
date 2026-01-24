@@ -615,7 +615,14 @@ class VimmsDownloader:
         """
         try:
             response = fetch_game_page(self.session, game_page_url)
-            return resolve_download_form(response.text, self.session, game_page_url, game_id, getattr(self, 'logger', None))
+            # Some test stubs may return objects without a .text property; prefer .text but fall back to decoding .content if needed
+            page_text = getattr(response, 'text', None)
+            if page_text is None and getattr(response, 'content', None) is not None:
+                try:
+                    page_text = response.content.decode('utf-8', errors='replace')
+                except Exception:
+                    page_text = str(response.content)
+            return resolve_download_form(page_text, self.session, game_page_url, game_id, getattr(self, 'logger', None))
             
         except Exception as e:
             msg = f"Error getting download URL: {e}"

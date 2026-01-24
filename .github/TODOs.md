@@ -33,12 +33,19 @@ Priority A — Safe, low-risk, high-value (implement first)
     - added `tests/test_constants.py` to validate basic coverage of constants
 
 Priority B — Medium-risk refactors (after A, add tests)
+
 - [x] (Completed) Extract HTML parsing & network helpers from `VimmsDownloader` into `downloader_lib` module — 2026-01-24
   - substeps:
     - added parsing helpers (`downloader_lib/parse.py`) and unit tests with saved HTML fixtures
     - added fetch helpers (`downloader_lib/fetch.py`)
     - refactored `VimmsDownloader` to call helpers from `downloader_lib`
     - removed duplicate `download_vimms/` package (clean up) — 2026-01-24
+- [~] (In Progress) Move implementation into `src/` package and add compatibility shims — 2026-01-24
+  - substeps:
+    - create `src/` and move `download_vimms.py`, `downloader_lib/`, `utils/` there
+    - add top-level shims to keep backward-compatible imports
+    - update tests and add a CLI smoke test
+    - run tests and fix regressions
 - [ ] (Todo) Add targeted tests for retry/backoff and 429 handling
 - [ ] (Todo) Add extraction tests (zip/.7z) using monkeypatch/stubs for `py7zr` and `zipfile`
 
