@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "outDir": "dist-cli",
+    "rootDir": "src"
+  },
+  "include": ["src/cli/**/*", "src/downloader/**/*", "src/downloader_lib/**/*", "src/utils/**/*", "src/metadata.ts"]
+}

@@ -4,25 +4,30 @@ Purpose: Give an AI coding agent the essential, actionable knowledge to be immed
 
 Quick summary
 
-- Canonical downloader: `download_vimms.py` (workspace root) — fetches games from Vimm's Lair and writes progress to `download_progress.json`.
-- Runner: `run_vimms.py` — orchestrates per-console runs, reads `vimms_config.json` (workspace root) and optionally per-folder `vimms_folder.json`.
-- Utility scripts: `clean_filenames.py`, `fix_folder_names.py` (see examples below).
+- New UI / Desktop app (current development target): Electron + Vite + React + TypeScript in the repo root. Dev: `npm run dev` (runs Vite + Electron). Build: `npm run build` (Vite build + `electron-builder`).
+- Utility scripts and former Python utilities should be ported into `src/scripts/` as features are migrated.
+- Important: During migration, prefer incremental conversion (one module at a time) and keep feature parity tests in `tests/` while porting.
 
 How to run (developer workflow) 🔧
 
-- Install dependencies in a venv (see `README.md` / `README_VIMMS.md`):
-  python -m venv .venv
-  source .venv/Scripts/activate # on Windows Git Bash / WSL
-  pip install -r requirements.txt
+- Node / TypeScript (primary dev flow):
 
-- Dry-run the runner (safe):
-  python run_vimms.py --dry-run
+  - Install node deps: `npm install`
+  - Start UI + Electron in dev mode: `npm run dev` (Vite + Electron)
+  - Start API + UI + Electron in dev mode: `npm run dev:all` (runs `ts-node` Express API, Vite and Electron)
+  - Start the Express API only: `npm run start:api` (binds to `http://127.0.0.1:3000` by default)
+  - Run unit tests: `npm run test` (uses `vitest`)
+  - Build desktop app: `npm run build` (Vite build + `electron-builder`)
 
-- Run a single console folder (non-interactive by default):
-  python run_vimms.py --folder "DS" --extract-files # add `--prompt` to enable prompts
+Notes on local development
 
-- Run the canonical downloader directly (for a folder):
-  python download_vimms.py --folder "C:/path/to/DS" # add `--prompt` to enable prompts
+- Prefer developing in TypeScript under `src/` for UI, API, and library code during migration; keep `archive/` as a read-only canonical reference until parity is reached.
+- Use `ts-node` / `ts-node-esm` for quick API iteration and `vitest` for unit testing TypeScript modules.
+- When changing behavior that affects downloads or deletion semantics, update `.github/TODOs.md` (mark In Progress) and post a short plan in an issue/PR before implementing.
+
+- Run the TypeScript Express API (during migration):
+  - Install deps: `npm install`
+  - Start API: `npm run start:api` (or `npm run dev:all` to start API + Vite + Electron)
 
 Key files & patterns (what to look at) 🔍
 

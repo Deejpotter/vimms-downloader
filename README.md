@@ -4,7 +4,16 @@ Brief: a small toolset to download and clean ROMs from Vimm's Lair.
 
 Getting started ✅
 
-- Dependencies are listed in `requirements.txt`. Install them in a venv:
+- The canonical Python implementation has been moved to `archive/` for reference and is run using a Python venv as before. See `README_VIMMS.md` inside `archive/` for Python-specific instructions.
+
+- New Desktop UI (Electron + Vite + React + TypeScript): install Node deps and run in dev mode:
+
+```bash
+npm install
+npm run dev
+```
+
+- Python-only workflows (downloader/tests) still use a venv and `requirements.txt` inside the repo root and/or `archive/requirements.txt`:
 
 ```bash
 python -m venv .venv
@@ -15,12 +24,20 @@ pip install -r requirements.txt
 
 Running downloads 🔧
 
-- Preferred entrypoint: `run_vimms.py`.
-  - Example: `python run_vimms.py --folder "G:/My Drive/Games/PS2"`
-  - By default runner/downloader are non-interactive. Use `--prompt` to allow interactive prompts.
-  - Pass `--no-detect-existing` to disable fuzzy-local-file detection (force downloads).
-    - Pass `--delete-duplicates` to enable prompting to remove redundant local files when multiple matches are found.
-    - Add `--yes-delete` to auto-confirm deletion of duplicates (use with caution; duplicates are moved to `scripts/deleted_duplicates/` timestamped folders).
+- TypeScript / Desktop workflow (current development target):
+  - The Electron UI + Express API provide a local interface to browse, inspect, and queue games for download. To start the development stack:
+    - `npm install`
+    - `npm run dev:all` (starts the Express API, Vite dev server, and Electron)
+  - CLI: The former `run_vimms.py` runner is being replaced by a TypeScript CLI. Run the CLI to perform downloads from the command line:
+    - Dry run (no downloads): `npm run run:cli -- --folder "C:/path/to/console" --dry-run`
+    - Default (perform downloads): `npm run run:cli -- --folder "C:/path/to/console"`
+  - Note: The Express API worker processes queue items sequentially (no concurrency) and `downloadGame` performs downloads, extraction for `.zip` and `.7z` (uses system `7z` for `.7z` archives when available), and optional categorization. A disk-backed popularity cache is stored at `ROMs/metadata_cache.json` for each target folder (TTL default 24h). To clear the cache for a folder, delete `ROMs/metadata_cache.json`.
+
+- Python archive (canonical reference / fallback):
+  - The original Python downloader remains the canonical reference implementation under `archive/` and supports the full download workflow today. If you need to perform actual downloads while the TypeScript port is in progress, run the Python runner:
+    - Create and activate a venv and install Python deps: `python -m venv .venv && source .venv/Scripts/activate && pip install -r archive/requirements.txt`
+    - Run a folder: `python run_vimms.py --folder "G:/My Drive/Games/PS2" --apply`
+  - When the TypeScript downloader reaches parity, the Python archive will be kept for reference and tests but the default developer flow will use the TypeScript/Express stack.
 
 Notes about detection 💡
 
@@ -76,20 +93,23 @@ New utilities
   - Two modes are supported with `--mode`: `stars` (default) buckets into `ROMs/stars/<n>/` (1..5) or `score` buckets into `ROMs/score/<n>/` (rounded 0..10).
   - Example (score mode apply): `python scripts/categorize_by_popularity.py --folder G:/Games/DS --apply --mode score`
 
-- Experimental Web UI (FastAPI) — local web interface to browse sections, view popularity, queue games and monitor processed tasks.
-  - Start the server (preferred, cross-shell):
-    - Activate venv and run: `python -m uvicorn src.webapp:app --reload --port 8000`
-    - Or on Windows use the bundled script: `.venv\Scripts\uvicorn.exe src.webapp:app --reload --port 8000`
-  - By default the UI listens on <http://127.0.0.1:8000/> (open in your browser).
+- Experimental Web UI — local web interface to browse sections, view popularity, queue games and monitor processed tasks.
+  - Two ways to run the API during migration:
+    - Python (FastAPI): the canonical Python implementation remains under `archive/` and can be started with a venv:
+      - Activate venv and run: `python -m uvicorn src.webapp:app --reload --port 8000`
+      - Or on Windows use the bundled script: `.venv\Scripts\uvicorn.exe src.webapp:app --reload --port 8000`
+    - TypeScript (Express): the new Express API (in `src/server/`) can be started during migration:
+      - Install node deps: `npm install`
+      - Run: `npm run start:api` (or `npm run dev:all` to start API, Vite and Electron together)
   - UI basics:
     - Set the folder path (console folder) in the Folder field and click **Init** to initialize a downloader instance for that folder.
     - Click a section (A, B, C, ...) to list games. Use **Details** to view the game's title and raw popularity data (score, votes) and **Queue** to queue it for download.
     - The UI shows the current queue and a list of recently processed tasks.
   - Persistence & files:
-    - The in-memory queue is saved to `src/webui_queue.json` so queued jobs survive server restarts.
+    - The in-memory queue is saved to `src/webui_queue.json` so queued jobs survive server restarts (Express and FastAPI variants are supported during migration).
     - Processed task history is saved to `src/webui_processed.json` and visible via the UI.
   - Server logs and per-folder downloader logs:
-    - UI process logs appear in the terminal running uvicorn.
+    - UI process logs appear in the terminal running the API process.
     - Per-folder downloader logs are written to `ROMs/vimms_downloader.log` in the target folder.
 
 Notes:

@@ -1,8 +1,8 @@
 # Vimm's Lair Downloader — Runner & Config
 
-This repository contains a canonical downloader (`download_vimms.py`) and a small runner (`run_vimms.py`) to manage downloads for multiple console folders (DS, GBA, SNES, etc.).
+This repository contains a canonical Python downloader (archived under `archive/`) and a new Desktop UI (Electron + Vite + React + TypeScript) in active development under `src/`.
 
-This README highlights the runner and configuration options added to control which folders are processed and to tune downloader behavior.
+This README documents the Python runner and configuration options (kept in `archive/`) for reference. The TypeScript desktop UI and Express API are the recommended developer flow going forward; see the top-level `README.md` for how to run the dev stack (`npm run dev:all`).
 
 ## Key points
 
@@ -102,11 +102,11 @@ The runner will use the top-level mapping if present; otherwise it will fall bac
 
 ## Web UI (experimental)
 
-- A minimal FastAPI-based web UI is scaffolded at `src/webapp.py` (requires `fastapi`, `uvicorn`, `jinja2`).
+- A minimal FastAPI-based web UI is available under `archive/` for the canonical Python implementation (requires `fastapi`, `uvicorn`, `jinja2`). During migration, a TypeScript/Express API is being developed under `src/server/`.
 
 ### Starting the UI
 
-- Recommended command (works cross-shell):
+- Python FastAPI (legacy/canonical):
   - Activate your venv then run:
 
     python -m uvicorn src.webapp:app --reload --port 8000
@@ -115,7 +115,11 @@ The runner will use the top-level mapping if present; otherwise it will fall bac
 
     .venv\Scripts\uvicorn.exe src.webapp:app --reload --port 8000
 
-- The UI will be available at `http://127.0.0.1:8000/`.
+- TypeScript Express (migration):
+  - Install node dependencies: `npm install`
+  - Run the API: `npm run start:api` (Express API binds to port 3000 by default)
+
+- The web UI can use either API depending on which you start; the desktop app (Electron) uses `VITE_API_BASE` environment variable to select the API base URL.
 
 ### What the UI provides (MVP)
 
