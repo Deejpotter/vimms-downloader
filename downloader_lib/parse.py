@@ -4,6 +4,7 @@ from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
 import requests
+import os
 
 BASE_URL = "https://vimm.net"
 DOWNLOAD_BASE = "https://dl2.vimm.net"
@@ -84,63 +85,36 @@ def resolve_download_form(html_content: str, session: requests.Session, game_pag
                     return action_url
 
     # Fallbacks if form parsing fails
-    a = soup.find('a', href=re.compile(r'mediaId=', re.IGNORECASE))
-    # Collect anchor candidates and prefer smaller disk-image formats (rvz > ciso) when possible
+    # Collect candidate anchors that appear to reference media downloads
     candidates = []
-    for anchor in soup.find_all('a', href=True):
-        href = anchor.get('href')
-        if href and (re.search(r'mediaId=', href, re.I) or 'dl' in href):
-            candidates.append(urljoin(BASE_URL + '/', href))
+    for a in soup.find_all('a', href=True):
+        href = a.get('href')
+        if not href:
+            continue
+        if re.search(r'mediaId=', href, re.IGNORECASE) or re.search(r'\.(ciso|rvz|iso|gcm)($|\?)', href, re.IGNORECASE):
+            resolved = urljoin(BASE_URL + '/', href)
+            # Try to infer extension from anchor text or href
+            text = (a.get_text(strip=True) or '').lower()
+            ext = None
+            if '.' in text:
+                ext = os.path.splitext(text)[1].lower()
+            if not ext:
+                m = re.search(r'\.(ciso|rvz|iso|gcm)($|\?)', href, re.IGNORECASE)
+                if m:
+                    ext = m.group(0).lower().split('?')[0]
+            candidates.append((resolved, ext))
 
-    # Try to probe candidates and prefer .rvz over .ciso
-    preferred_order = ['.rvz', '.ciso']
-    def probe_candidates(cands):
-        results = []  # list of tuples (ext, url)
-        for c in cands:
-            try:
-                # Use a lightweight GET to allow redirects and observe headers/url
-                resp = session.get(c, allow_redirects=True, verify=False)
-                # Prefer Content-Disposition filename if present
-                content_disp = resp.headers.get('Content-Disposition', '')
-                filename_match = re.findall(r'filename="([^\"]*)"', content_disp)
-                if filename_match:
-                    fname = filename_match[0]
-                    ext = (fname and ('.' + fname.split('.')[-1].lower())) or ''
-                else:
-                    # Fallback to response URL path
-                    parsed = urlparse(resp.url)
-                    ext = ''
-                    if '.' in parsed.path:
-                        ext = '.' + parsed.path.split('.')[-1].lower()
-
-                results.append((ext, resp.url))
-            except Exception:
-                if logger: logger.debug(f"Probing candidate failed: {c}")
-                continue
-
-        # Prefer candidates based on preferred_order
-        for pe in preferred_order:
-            for ext, url in results:
-                if ext == pe:
-                    if logger: logger.info(f"Selected candidate {url} for {game_id} with preferred ext {ext}")
+    # Prefer .ciso if present, then .rvz, otherwise return first candidate
+    if candidates:
+        pref = ['.ciso', '.rvz']
+        for p in pref:
+            for url, ext in candidates:
+                if ext == p:
+                    if logger: logger.info(f"Resolved download URL via preferred anchor for {game_id}: {url} (matched {p})")
                     return url
-
-        # Otherwise return first successful candidate if any
-        if results:
-            if logger: logger.debug(f"No preferred ext found; selecting first candidate {results[0][1]} for {game_id}")
-            return results[0][1]
-        return None
-
-    # Prefer probing candidates first
-    selected = probe_candidates(candidates)
-    if selected:
-        if logger: logger.info(f"Resolved download URL via candidate probe for {game_id}: {selected}")
-        return selected
-
-    if a and a.get('href'):
-        resolved = urljoin(BASE_URL + '/', a.get('href'))
-        if logger: logger.info(f"Resolved download URL via anchor for {game_id}: {resolved}")
-        return resolved
+        # No preferred ext found; return first candidate
+        if logger: logger.info(f"Resolved download URL via anchor for {game_id}: {candidates[0][0]}")
+        return candidates[0][0]
 
     if not media_id:
         alt = soup.find('input', attrs={'name': re.compile(r'^mediaId$', re.I)})
