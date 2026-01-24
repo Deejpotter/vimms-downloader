@@ -1,6 +1,6 @@
 # Central constants for vimms-downloader
 ROM_EXTENSIONS = ['.nds', '.sav', '.n64', '.z64', '.v64', '.iso', '.bin', '.cue',
-                  '.gba', '.gbc', '.gb', '.smc', '.sfc', '.nes', '.gcm', '.wbfs']
+                  '.gba', '.gbc', '.gb', '.smc', '.sfc', '.nes', '.gcm', '.wbfs', '.ciso', '.rvz']
 
 ARCHIVE_EXTENSIONS = ['.zip', '.7z']
 
