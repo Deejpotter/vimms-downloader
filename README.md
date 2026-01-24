@@ -34,6 +34,7 @@ Repository layout 🔍
 
 - `download_vimms.py` — canonical downloader at the workspace root (used by the runner)
 - `run_vimms.py` — small wrapper to call `download_vimms.py` against any folder
+- `downloader_lib/` — parsing and network helpers used by `download_vimms.py` (e.g., `parse.py`, `fetch.py`)
 - `clean_filenames.py` — filename cleaner; runs on the folder it's executed within
 - `requirements.txt` — pip requirements used by the downloader
 

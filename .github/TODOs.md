@@ -2,6 +2,7 @@
 
 This file tracks the work planned and completed for this repository. Keep the most recent 10 completed items.
 
+- [x] (Completed) Extract parsing & fetch helpers into `downloader_lib` and remove duplicate `download_vimms/` package — 2026-01-24
 - [x] (Completed) Add `.github/copilot-instructions.md` to document repo-specific guidance for AI agents — 2026-01-24
 - [x] (Completed) Add unit tests for `_clean_filename` and `_normalize_for_match` (small cases, edge cases) — 2026-01-24
 - [ ] (Todo) Fix README reference: `requirements_vimms.txt` vs `requirements.txt` (update docs or add the file)
@@ -32,11 +33,12 @@ Priority A — Safe, low-risk, high-value (implement first)
     - added `tests/test_constants.py` to validate basic coverage of constants
 
 Priority B — Medium-risk refactors (after A, add tests)
-- [~] (In Progress) Extract HTML parsing & network helpers from `VimmsDownloader` into `downloader_lib` module — 2026-01-24
+- [x] (Completed) Extract HTML parsing & network helpers from `VimmsDownloader` into `downloader_lib` module — 2026-01-24
   - substeps:
-    - add parsing helpers (`downloader_lib/parse.py`) and unit tests with saved HTML fixtures
-    - add fetch helpers (`downloader_lib/fetch.py`)
-    - refactor `VimmsDownloader` to call helpers from `downloader_lib`
+    - added parsing helpers (`downloader_lib/parse.py`) and unit tests with saved HTML fixtures
+    - added fetch helpers (`downloader_lib/fetch.py`)
+    - refactored `VimmsDownloader` to call helpers from `downloader_lib`
+    - removed duplicate `download_vimms/` package (clean up) — 2026-01-24
 - [ ] (Todo) Add targeted tests for retry/backoff and 429 handling
 - [ ] (Todo) Add extraction tests (zip/.7z) using monkeypatch/stubs for `py7zr` and `zipfile`
 
