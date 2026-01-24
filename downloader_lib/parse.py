@@ -67,7 +67,7 @@ def resolve_download_form(html_content: str, session: requests.Session, game_pag
             if method == 'get':
                 new_q = urlencode(params, doseq=False)
                 action_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_q, parsed.fragment))
-                if logger: logger..info(f"Resolved download URL via form action (GET) for {game_id}: {action_url}")
+                if logger: logger.info(f"Resolved download URL via form action (GET) for {game_id}: {action_url}")
                 return action_url
             else: # POST
                 try:
@@ -85,6 +85,58 @@ def resolve_download_form(html_content: str, session: requests.Session, game_pag
 
     # Fallbacks if form parsing fails
     a = soup.find('a', href=re.compile(r'mediaId=', re.IGNORECASE))
+    # Collect anchor candidates and prefer smaller disk-image formats (rvz > ciso) when possible
+    candidates = []
+    for anchor in soup.find_all('a', href=True):
+        href = anchor.get('href')
+        if href and (re.search(r'mediaId=', href, re.I) or 'dl' in href):
+            candidates.append(urljoin(BASE_URL + '/', href))
+
+    # Try to probe candidates and prefer .rvz over .ciso
+    preferred_order = ['.rvz', '.ciso']
+    def probe_candidates(cands):
+        results = []  # list of tuples (ext, url)
+        for c in cands:
+            try:
+                # Use a lightweight GET to allow redirects and observe headers/url
+                resp = session.get(c, allow_redirects=True, verify=False)
+                # Prefer Content-Disposition filename if present
+                content_disp = resp.headers.get('Content-Disposition', '')
+                filename_match = re.findall(r'filename="([^\"]*)"', content_disp)
+                if filename_match:
+                    fname = filename_match[0]
+                    ext = (fname and ('.' + fname.split('.')[-1].lower())) or ''
+                else:
+                    # Fallback to response URL path
+                    parsed = urlparse(resp.url)
+                    ext = ''
+                    if '.' in parsed.path:
+                        ext = '.' + parsed.path.split('.')[-1].lower()
+
+                results.append((ext, resp.url))
+            except Exception:
+                if logger: logger.debug(f"Probing candidate failed: {c}")
+                continue
+
+        # Prefer candidates based on preferred_order
+        for pe in preferred_order:
+            for ext, url in results:
+                if ext == pe:
+                    if logger: logger.info(f"Selected candidate {url} for {game_id} with preferred ext {ext}")
+                    return url
+
+        # Otherwise return first successful candidate if any
+        if results:
+            if logger: logger.debug(f"No preferred ext found; selecting first candidate {results[0][1]} for {game_id}")
+            return results[0][1]
+        return None
+
+    # Prefer probing candidates first
+    selected = probe_candidates(candidates)
+    if selected:
+        if logger: logger.info(f"Resolved download URL via candidate probe for {game_id}: {selected}")
+        return selected
+
     if a and a.get('href'):
         resolved = urljoin(BASE_URL + '/', a.get('href'))
         if logger: logger.info(f"Resolved download URL via anchor for {game_id}: {resolved}")
