@@ -24,7 +24,13 @@
   },
   "build": {
     "appId": "com.example.vimmsdownloader",
-    "files": ["dist/**", "electron/**", "package.json"],
-    "directories": { "buildResources": "assets" }
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    }
   }
 }
