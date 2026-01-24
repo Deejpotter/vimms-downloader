@@ -67,21 +67,20 @@ def resolve_download_form(html_content: str, session: requests.Session, game_pag
             if method == 'get':
                 new_q = urlencode(params, doseq=False)
                 action_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_q, parsed.fragment))
-                if logger: logger..info(f"Resolved download URL via form action (GET) for {game_id}: {action_url}")
+                if logger: logger.info(f"Resolved download URL via form action (GET) for {game_id}: {action_url}")
                 return action_url
             else: # POST
-                try:
-                    headers_post = {'User-Agent': session.headers.get('User-Agent'), 'Referer': game_page_url}
-                    if logger: logger.info(f"Submitting POST form to {action_url} for {game_id} with params {params}")
-                    resp = session.post(action_url, data=params, headers=headers_post, verify=False, allow_redirects=True)
-                    if resp and resp.url:
-                        if logger: logger.info(f"POST form resolved to URL for {game_id}: {resp.url}")
-                        return resp.url
-                except Exception:
-                    new_q = urlencode(params, doseq=False)
-                    action_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_q, parsed.fragment))
-                    if logger: logger.exception(f"POST form submission failed for {game_id}, falling back to GET-like URL: {action_url}")
-                    return action_url
+                # For POST forms, extract the mediaId and construct a direct download URL
+                # The server expects a GET request to the download URL with cookies from visiting the game page
+                media_id = params.get('mediaId')
+                if media_id:
+                    # Use the action URL's netloc (dl3.vimm.net, etc.) with mediaId as query param
+                    download_url = f"{parsed.scheme}://{parsed.netloc}/?mediaId={media_id}"
+                    # Include alt parameter if present
+                    if 'alt' in params:
+                        download_url += f"&alt={params['alt']}"
+                    if logger: logger.info(f"Constructed download URL from POST form for {game_id}: {download_url}")
+                    return download_url
 
     # Fallbacks if form parsing fails
     a = soup.find('a', href=re.compile(r'mediaId=', re.IGNORECASE))
