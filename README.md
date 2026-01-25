@@ -2,6 +2,91 @@
 
 Brief: a small toolset to download and clean ROMs from Vimm's Lair.
 
+## Quick Start - Web Interface 🌐
+
+**Modern React + Tailwind CSS UI** with progressive workspace scanning and real-time download queue!
+
+**1. Set up virtual environment and install dependencies:**
+
+```bash
+# Create virtual environment
+python -m venv .venv
+
+# Activate it (Windows Git Bash / WSL)
+source .venv/Scripts/activate
+
+# OR activate it (Windows CMD)
+.venv\Scripts\activate.bat
+
+# OR activate it (Windows PowerShell)
+.venv\Scripts\Activate.ps1
+
+# Install Python dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+**2. Run the web interface:**
+
+```bash
+# Make sure venv is activated first!
+python src/webapp.py
+```
+
+**3. Open browser:**
+
+- Navigate to: **<http://127.0.0.1:8000>**
+
+**4. Use the interface:**
+
+- Enter your workspace root path (e.g., `C:\ROMs` or `H:/Games`)
+- Click **Initialize Index** to scan all console folders
+- Watch consoles appear progressively as they're scanned (real-time updates)
+- Select a console to browse sections (A-Z, 0-9, #)
+- Click sections to view games with local presence detection
+- Click **Add to Queue** on games you want to download
+- Downloads run in background worker thread
+- Check the floating **Queue** button (bottom-right) for download status and progress
+
+**5. Stop the server:**
+
+- Press `Ctrl+C` in terminal
+
+---
+
+### Frontend Development Mode
+
+**Only needed if you want to modify the React UI with hot reload:**
+
+```bash
+# Terminal 1: Flask backend (API server)
+python src/webapp.py
+
+# Terminal 2: Vite dev server (React hot reload)
+cd frontend
+yarn install  # first time only
+yarn dev
+```
+
+- Development server: http://localhost:5173 (hot reload enabled)
+- Flask API: http://127.0.0.1:8000/api/*
+- Vite automatically proxies API calls to Flask
+
+**Building for production:**
+
+```bash
+cd frontend
+yarn build
+```
+
+This compiles React app to `src/webui_static/dist` which Flask serves automatically.
+
+See [frontend/README.md](frontend/README.md) for detailed frontend development documentation.
+
+---
+
+## Command Line Usage 🔧
+
 Getting started ✅
 
 - Dependencies are listed in `requirements.txt`. Install them in a venv:

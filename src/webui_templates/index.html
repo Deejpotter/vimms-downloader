@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vimm's Lair Downloader</title>
+  <link rel="stylesheet" href="/static/main.css">
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>🎮 Vimm's Lair Downloader</h1>
+      <div class="folder-selection">
+        <input type="text" id="folderPath" placeholder="Enter workspace root (e.g., H:/Games)" />
+        <button id="initFolder">Initialize</button>
+        <button id="refreshIndex">Refresh Index</button>
+      </div>
+      <div id="status" class="status"></div>
+      <div id="consolesContainer" style="margin-top:0.5rem; display:none;"></div>
+    </header>
+
+    <main>
+      <div class="sections-panel">
+        <h2>Browse Sections</h2>
+        <div id="sectionsContainer" class="sections-grid"></div>
+      </div>
+
+      <div class="games-panel">
+        <h2 id="sectionTitle">Games</h2>
+        <div id="gamesLoading" class="loading" style="display: none;">Loading games...</div>
+        <div id="gamesContainer" class="games-list"></div>
+      </div>
+
+      <div class="queue-panel">
+        <h2>Download Queue <span id="queueCount" class="badge">0</span></h2>
+        <button id="clearQueue" class="btn-secondary">Clear Queue</button>
+        <div id="queueContainer" class="queue-list"></div>
+
+        <h2 style="margin-top: 2rem;">Recently Processed</h2>
+        <div id="processedContainer" class="processed-list"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>

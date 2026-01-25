@@ -4,13 +4,25 @@ Purpose: Give an AI coding agent the essential, actionable knowledge to be immed
 
 Quick summary
 
-- Canonical downloader: `download_vimms.py` (workspace root) — fetches games from Vimm's Lair and writes progress to `download_progress.json`.
-- Runner: `run_vimms.py` — orchestrates per-console runs, reads `vimms_config.json` (workspace root) and optionally per-folder `vimms_folder.json`.
-- Utility scripts: `clean_filenames.py`, `fix_folder_names.py` (see examples below).
+- **Web UI**: React + Tailwind CSS frontend (`frontend/`) served by Flask (`src/webapp.py`) on port 8000 with progressive index building and real-time download queue.
+- **Canonical downloader**: `download_vimms.py` (workspace root) — fetches games from Vimm's Lair and writes progress to `download_progress.json`.
+- **Runner**: `run_vimms.py` — orchestrates per-console runs, reads `vimms_config.json` (workspace root) and optionally per-folder `vimms_folder.json`.
+- **Utility scripts**: `clean_filenames.py`, `fix_folder_names.py` (see examples below).
 
 How to run (developer workflow) 🔧
 
-- Install dependencies in a venv (see `README.md` / `README_VIMMS.md`):
+- **Web UI (recommended)**:
+  python src/webapp.py
+  # Visit http://127.0.0.1:8000
+
+- **Web UI development** (React hot reload):
+  # Terminal 1: Flask backend
+  python src/webapp.py
+  # Terminal 2: Vite dev server
+  cd frontend && yarn dev
+  # Visit http://localhost:5173
+
+- Install dependencies in a venv (see `README.md`):
   python -m venv .venv
   source .venv/Scripts/activate # on Windows Git Bash / WSL
   pip install -r requirements.txt
@@ -26,14 +38,22 @@ How to run (developer workflow) 🔧
 
 Key files & patterns (what to look at) 🔍
 
-- `download_vimms.py` — main logic: sections listing, `VimmsDownloader` class, detection and download flow, progress handling, logging
-  - progress file saved as `<folder>/download_progress.json` (tracks 'completed', 'failed', 'last_section')
-  - per-download logging file: `ROMs/vimms_downloader.log`
-  - failed HTTP bodies saved under `ROMs/failed_responses/`
-- `run_vimms.py` — orchestration: resolves targets, loads `vimms_config.json`, supports legacy whitelist/blacklist, supports `--report` to write `progress_report.json`
-- `vimms_config.json` (workspace root) preferred for global folder mapping; per-folder fallback: `vimms_folder.json` in console folder
-- `clean_filenames.py` — canonical cleaning rules used by the downloader (`_clean_filename`) — prefer keeping logic in sync
-- `fix_folder_names.py` — utility to infer console by extensions and propose safe renames
+- **Web UI**:
+  - `src/webapp.py` — Flask backend: API endpoints (`/api/*`), worker thread, index building, serves React build from `webui_static/dist`
+  - `frontend/src/App.jsx` — Main React component, orchestrates all UI components
+  - `frontend/src/components/` — React components (WorkspaceInit, ConsoleGrid, SectionBrowser, GamesList, QueuePanel, ProcessedList)
+  - `frontend/src/services/api.js` — API client functions for all Flask endpoints
+  - `frontend/src/hooks/useIndexBuilder.js` — Custom hook for progressive index updates (polls every 500ms)
+  - Build output: `src/webui_static/dist/` — Vite-built static files served by Flask
+- **Downloader Core**:
+  - `download_vimms.py` — main logic: sections listing, `VimmsDownloader` class, detection and download flow, progress handling, logging
+    - progress file saved as `<folder>/download_progress.json` (tracks 'completed', 'failed', 'last_section')
+    - per-download logging file: `ROMs/vimms_downloader.log`
+    - failed HTTP bodies saved under `ROMs/failed_responses/`
+  - `run_vimms.py` — orchestration: resolves targets, loads `vimms_config.json`, supports legacy whitelist/blacklist, supports `--report` to write `progress_report.json`
+  - `vimms_config.json` (workspace root) preferred for global folder mapping; per-folder fallback: `vimms_folder.json` in console folder
+  - `clean_filenames.py` — canonical cleaning rules used by the downloader (`_clean_filename`) — prefer keeping logic in sync
+  - `fix_folder_names.py` — utility to infer console by extensions and propose safe renames
 
 Project-specific conventions & behaviors ⚠️
 
@@ -46,8 +66,15 @@ Project-specific conventions & behaviors ⚠️
 
 Integration & dependencies 🔗
 
-- HTTP fetching: `requests`, HTML parsing: `beautifulsoup4` (`bs4`).
-- Optional: `py7zr` for `.7z` extraction (missing => extraction skipped with a user-visible message).
+- **Backend (Python)**:
+  - Flask web framework (`flask>=3.0.0`)
+  - HTTP fetching: `requests`, HTML parsing: `beautifulsoup4` (`bs4`)
+  - Optional: `py7zr` for `.7z` extraction (missing => extraction skipped with a user-visible message)
+- **Frontend (JavaScript)**:
+  - React 19 for UI components
+  - Vite 7.2.5 (rolldown-vite) for build tooling
+  - Tailwind CSS v3 for styling
+  - Yarn for package management
 - Tests/CI: None present — prefer small unit tests around `_clean_filename`, normalization, and fuzzy-match heuristics.
 
 Debugging tips 🐞
@@ -64,10 +91,17 @@ Examples to reference in code (use these snippets as test cases)
 
 When editing code ✏️
 
-- Keep CLI argument behavior and config precedence intact: CLI flags > per-folder `vimms_folder.json` > top-level `vimms_config.json` defaults.
-- Preserve progress file format (list of completed ids + failed entries with metadata) to keep resume capability stable.
-- If changing filename cleaning logic, update both `clean_filenames.py` and the in-class `_clean_filename` implementation to avoid divergence.
-- Add unit tests for any algorithmic change (normalization, fuzzy thresholds, index-building). Keep tests small and deterministic.
+- **Web UI changes**:
+  - Edit React components in `frontend/src/components/`
+  - After changes, rebuild: `cd frontend && yarn build`
+  - For development with hot reload: `yarn dev` (port 5173)
+  - API endpoints in `src/webapp.py` follow REST conventions: `/api/resource` with HTTP methods (GET/POST/DELETE)
+  - Keep API client (`frontend/src/services/api.js`) in sync with Flask routes
+- **Downloader core**:
+  - Keep CLI argument behavior and config precedence intact: CLI flags > per-folder `vimms_folder.json` > top-level `vimms_config.json` defaults.
+  - Preserve progress file format (list of completed ids + failed entries with metadata) to keep resume capability stable.
+  - If changing filename cleaning logic, update both `clean_filenames.py` and the in-class `_clean_filename` implementation to avoid divergence.
+  - Add unit tests for any algorithmic change (normalization, fuzzy thresholds, index-building). Keep tests small and deterministic.
 
 Help & iteration 💬
 

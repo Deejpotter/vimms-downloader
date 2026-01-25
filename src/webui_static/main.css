@@ -1,0 +1,287 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #333;
+    min-height: 100vh;
+    padding: 1rem;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2rem;
+}
+
+header h1 {
+    margin-bottom: 1rem;
+    font-size: 2rem;
+}
+
+.folder-selection {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+#folderPath {
+    flex: 1;
+    padding: 0.75rem;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.9);
+    font-size: 1rem;
+}
+
+button {
+    padding: 0.75rem 1.5rem;
+    background: white;
+    color: #667eea;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-secondary {
+    background: #f0f0f0;
+    color: #666;
+}
+
+.status {
+    padding: 0.75rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+.status.success {
+    background: rgba(76, 175, 80, 0.2);
+    color: white;
+}
+
+.status.error {
+    background: rgba(244, 67, 54, 0.2);
+    color: white;
+}
+
+.status.info {
+    background: rgba(33, 150, 243, 0.2);
+    color: white;
+}
+
+#consolesContainer {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+}
+
+#consolesContainer .loading {
+    margin-bottom: 0.5rem;
+}
+
+#consolesContainer .section-btn {
+    background: #ffffff;
+    color: #667eea;
+    border: 1px solid #e6e6e6;
+}
+
+main {
+    display: grid;
+    grid-template-columns: 200px 1fr 300px;
+    gap: 1rem;
+    padding: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+    main {
+        grid-template-columns: 1fr;
+    }
+}
+
+.sections-panel h2,
+.games-panel h2,
+.queue-panel h2 {
+    margin-bottom: 1rem;
+    color: #667eea;
+    font-size: 1.2rem;
+}
+
+.sections-grid {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.section-btn {
+    padding: 0.5rem;
+    text-align: center;
+    background: #f5f5f5;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 600;
+    color: #666;
+}
+
+.section-btn:hover {
+    background: #667eea;
+    color: white;
+}
+
+.section-btn.active {
+    background: #667eea;
+    color: white;
+}
+
+.games-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.game-item {
+    padding: 1rem;
+    background: #f9f9f9;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.game-item:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+}
+
+.game-item.present {
+    background: #e8f5e9;
+    border-color: #4caf50;
+}
+
+.game-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.game-name {
+    font-weight: 600;
+    color: #333;
+    flex: 1;
+}
+
+.game-status {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.game-status.local {
+    background: #4caf50;
+    color: white;
+}
+
+.game-status.remote {
+    background: #ff9800;
+    color: white;
+}
+
+.queue-btn {
+    padding: 0.5rem 1rem;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.queue-btn:hover {
+    background: #5568d3;
+}
+
+.queue-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.queue-list,
+.processed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.queue-item,
+.processed-item {
+    padding: 0.75rem;
+    background: #f5f5f5;
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+.processed-item.success {
+    background: #e8f5e9;
+}
+
+.processed-item.failed {
+    background: #ffebee;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background: #ff5722;
+    color: white;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+}
+
+.loading {
+    text-align: center;
+    padding: 2rem;
+    color: #999;
+    font-style: italic;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

@@ -1,0 +1,354 @@
+// State management
+let currentFolder = null;
+let currentSection = null;
+let pollInterval = null;
+
+// DOM elements
+const folderPath = document.getElementById('folderPath');
+const initBtn = document.getElementById('initFolder');
+const statusDiv = document.getElementById('status');
+const sectionsContainer = document.getElementById('sectionsContainer');
+const gamesContainer = document.getElementById('gamesContainer');
+const gamesLoading = document.getElementById('gamesLoading');
+const sectionTitle = document.getElementById('sectionTitle');
+const queueContainer = document.getElementById('queueContainer');
+const processedContainer = document.getElementById('processedContainer');
+const queueCount = document.getElementById('queueCount');
+const clearQueueBtn = document.getElementById('clearQueue');
+const consolesContainer = document.getElementById('consolesContainer');
+
+// Utility functions
+function showStatus(message, type = 'info') {
+  statusDiv.textContent = message;
+  statusDiv.className = `status ${type}`;
+  setTimeout(() => {
+    statusDiv.textContent = '';
+    statusDiv.className = 'status';
+  }, 5000);
+}
+
+async function fetchAPI(url, options = {}) {
+  try {
+    console.log('Fetching:', url, options);
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    console.log('Response:', url, data);
+    return data;
+  } catch (error) {
+    console.error('API Error:', error);
+    showStatus(`API Error: ${error.message}`, 'error');
+    throw error;
+  }
+}
+
+// Initialize folder
+async function initFolder(folder) {
+  try {
+    const data = await fetchAPI('/api/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder })
+    });
+
+    if (data.status === 'ok') {
+      currentFolder = data.folder;
+      consolesContainer.style.display = 'none';
+      consolesContainer.innerHTML = '';
+      
+      // Save to localStorage
+      localStorage.setItem('vimms_lastFolder', folder);
+      localStorage.setItem('vimms_currentFolder', data.folder);
+      localStorage.setItem('vimms_system', data.system || 'Unknown');
+      localStorage.removeItem('vimms_consoles'); // Clear consoles list for single folder
+      
+      showStatus(`Initialized: ${currentFolder} (System: ${data.system || 'Unknown'})`, 'success');
+      await loadSections();
+      // Auto-load first section to save user clicks
+      if (document.querySelector('.section-btn')) {
+        const firstSection = document.querySelector('.section-btn').textContent;
+        await loadSection(firstSection);
+      }
+      startPolling();
+    } else if (data.status === 'root') {
+      // Save workspace root and available consoles
+      localStorage.setItem('vimms_lastFolder', folder);
+      localStorage.setItem('vimms_rootFolder', data.root);
+      localStorage.setItem('vimms_consoles', JSON.stringify(data.consoles));
+      
+      showStatus(`Root folder detected with consoles: ${data.consoles.join(', ')}`, 'info');
+      showConsoles(data.root, data.consoles);
+    }
+  } catch (error) {
+    showStatus('Failed to initialize folder', 'error');
+  }
+}
+
+initBtn.addEventListener('click', async () => {
+  const folder = folderPath.value.trim();
+  if (!folder) {
+    showStatus('Please enter a folder path', 'error');
+    return;
+  }
+  
+  // Clear previous state
+  currentFolder = null;
+  currentSection = null;
+  sectionsContainer.innerHTML = '';
+  gamesContainer.innerHTML = '';
+  consolesContainer.style.display = 'none';
+  sectionTitle.textContent = '';
+  
+  // Show loading
+  statusDiv.textContent = 'Initializing...';
+  statusDiv.className = 'status info';
+  initBtn.disabled = true;
+  
+  await initFolder(folder);
+  initBtn.disabled = false;
+});
+
+function showConsoles(root, consoles) {
+  consolesContainer.style.display = 'block';
+  consolesContainer.innerHTML = '';
+  console.log('showConsoles', root, consoles);
+  const info = document.createElement('div');
+  info.className = 'loading';
+  info.textContent = 'Multiple console folders detected — choose one:';
+  consolesContainer.appendChild(info);
+
+  const list = document.createElement('div');
+  list.style.marginTop = '0.5rem';
+  list.style.display = 'flex';
+  list.style.flexWrap = 'wrap';
+  list.style.gap = '0.5rem';
+
+  consoles.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'section-btn';
+    btn.textContent = c;
+    btn.addEventListener('click', async () => {
+      const fullPath = `${root}/${c}`.replace(/\\/g, '/');
+      folderPath.value = fullPath;
+      // Save the selected console
+      localStorage.setItem('vimms_lastConsole', c);
+      await initFolder(fullPath);
+    });
+    list.appendChild(btn);
+  });
+
+  consolesContainer.appendChild(list);
+  // focus the consoles container so users notice it
+  consolesContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// Load sections
+async function loadSections() {
+  try {
+    const data = await fetchAPI('/api/sections');
+    sectionsContainer.innerHTML = '';
+
+    data.sections.forEach(section => {
+      const btn = document.createElement('div');
+      btn.className = 'section-btn';
+      btn.textContent = section;
+      btn.addEventListener('click', () => loadSection(section));
+      sectionsContainer.appendChild(btn);
+    });
+  } catch (error) {
+    console.error('Failed to load sections:', error);
+  }
+}
+
+// Load games from a section
+async function loadSection(section) {
+  if (!currentFolder) {
+    showStatus('Please initialize a folder first', 'error');
+    return;
+  }
+
+  currentSection = section;
+  sectionTitle.textContent = `Section: ${section} (${currentFolder || 'No folder'})`;
+  gamesLoading.style.display = 'block';
+  gamesContainer.innerHTML = '';
+
+  // Update active section button
+  document.querySelectorAll('.section-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent === section);
+  });
+
+  try {
+    const data = await fetchAPI(`/api/section/${section}?folder=${encodeURIComponent(currentFolder)}`);
+    gamesLoading.style.display = 'none';
+
+    if (data.games.length === 0) {
+      gamesContainer.innerHTML = '<div class="loading">No games found in this section</div>';
+      return;
+    }
+
+    data.games.forEach(game => {
+      const gameDiv = document.createElement('div');
+      gameDiv.className = `game-item ${game.present ? 'present' : ''}`;
+
+      const header = document.createElement('div');
+      header.className = 'game-header';
+
+      const name = document.createElement('div');
+      name.className = 'game-name';
+      name.textContent = game.name;
+
+      const status = document.createElement('span');
+      status.className = `game-status ${game.present ? 'local' : 'remote'}`;
+      status.textContent = game.present ? '✓ Local' : '☁ Remote';
+
+      const queueBtn = document.createElement('button');
+      queueBtn.className = 'queue-btn';
+      queueBtn.textContent = game.present ? 'Already Downloaded' : 'Queue Download';
+      queueBtn.disabled = game.present;
+
+      if (!game.present) {
+        queueBtn.addEventListener('click', () => queueGame(game));
+      }
+
+      header.appendChild(name);
+      header.appendChild(status);
+      header.appendChild(queueBtn);
+      gameDiv.appendChild(header);
+      gamesContainer.appendChild(gameDiv);
+    });
+  } catch (error) {
+    gamesLoading.style.display = 'none';
+    gamesContainer.innerHTML = '<div class="loading">Failed to load games</div>';
+  }
+}
+
+// Queue a game for download
+async function queueGame(game) {
+  try {
+    await fetchAPI('/api/queue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder: currentFolder,
+        game: game
+      })
+    });
+    showStatus(`Queued: ${game.name}`, 'success');
+    updateQueue();
+  } catch (error) {
+    showStatus('Failed to queue game', 'error');
+  }
+}
+
+// Update queue display
+async function updateQueue() {
+  try {
+    const data = await fetchAPI('/api/queue');
+    queueCount.textContent = data.queue.length;
+
+    queueContainer.innerHTML = '';
+    if (data.queue.length === 0) {
+      queueContainer.innerHTML = '<div class="loading">Queue is empty</div>';
+    } else {
+      data.queue.forEach(item => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'queue-item';
+        const gameName = item.game?.name || item.name || 'Unknown';
+        itemDiv.textContent = gameName;
+        queueContainer.appendChild(itemDiv);
+      });
+    }
+    return data.queue; // Return for polling logic
+  } catch (error) {
+    console.error('Failed to update queue:', error);
+    return [];
+  }
+}
+
+// Update processed list
+async function updateProcessed() {
+  try {
+    const data = await fetchAPI('/api/processed');
+
+    processedContainer.innerHTML = '';
+    if (data.processed.length === 0) {
+      processedContainer.innerHTML = '<div class="loading">No processed items yet</div>';
+    } else {
+      data.processed.slice(0, 10).forEach(item => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = `processed-item ${item.success ? 'success' : 'failed'}`;
+        const gameName = item.item?.game?.name || item.item?.name || 'Unknown';
+        const statusIcon = item.success ? '✓' : '✗';
+        itemDiv.textContent = `${statusIcon} ${gameName}`;
+        processedContainer.appendChild(itemDiv);
+      });
+    }
+    return data.processed; // Return for polling logic
+  } catch (error) {
+    console.error('Failed to update processed:', error);
+    return [];
+  }
+}
+
+// Clear queue
+clearQueueBtn.addEventListener('click', async () => {
+  if (!confirm('Are you sure you want to clear the download queue?')) {
+    return;
+  }
+
+  try {
+    await fetchAPI('/api/queue', { method: 'DELETE' });
+    showStatus('Queue cleared', 'success');
+    updateQueue();
+  } catch (error) {
+    showStatus('Failed to clear queue', 'error');
+  }
+});
+
+// Polling for updates
+function startPolling() {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+  }
+
+  pollInterval = setInterval(async () => {
+    const queue = await updateQueue();
+    const processed = await updateProcessed();
+    // Could pause polling here if both empty, but keep it simple for now
+  }, 5000); // Reduced from 3s to 5s to feel less "stuck"
+}
+
+// Initial load
+document.addEventListener('DOMContentLoaded', async () => {
+  updateQueue();
+  updateProcessed();
+  
+  // Restore last session from localStorage
+  const lastFolder = localStorage.getItem('vimms_lastFolder');
+  const consoles = localStorage.getItem('vimms_consoles');
+  const currentFolderStored = localStorage.getItem('vimms_currentFolder');
+  const system = localStorage.getItem('vimms_system');
+  
+  if (lastFolder) {
+    folderPath.value = lastFolder;
+    
+    // If we have a stored current folder (single console), auto-initialize
+    if (currentFolderStored && !consoles) {
+      showStatus(`Restoring session: ${currentFolderStored} (${system || 'Unknown'})...`, 'info');
+      await initFolder(lastFolder);
+    }
+    // If we have consoles list (workspace root), show the console picker
+    else if (consoles) {
+      try {
+        const consoleList = JSON.parse(consoles);
+        const rootFolder = localStorage.getItem('vimms_rootFolder') || lastFolder;
+        showStatus(`Restored workspace: ${consoleList.length} consoles available`, 'info');
+        showConsoles(rootFolder, consoleList);
+      } catch (e) {
+        console.error('Failed to parse stored consoles:', e);
+      }
+    }
+  }
+});
