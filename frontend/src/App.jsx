@@ -5,6 +5,8 @@ import { SectionBrowser } from './components/SectionBrowser';
 import { GamesList } from './components/GamesList';
 import { QueuePanel } from './components/QueuePanel';
 import { ProcessedList } from './components/ProcessedList';
+import SettingsMenu from './components/SettingsMenu';
+import ResyncModal from './components/ResyncModal';
 import { useIndexBuilder } from './hooks/useIndexBuilder';
 import { getProcessed, getIndex } from './services/api';
 
@@ -76,10 +78,15 @@ function App() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <header className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg">
-        <div className="container mx-auto px-6 py-6">
-          <h1 className="text-3xl font-bold">Vimm's Lair Downloader</h1>
-          <p className="text-purple-100 mt-1">Browse and download retro games</p>
-        </div>
+<div className="container mx-auto px-6 py-6 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold">Vimm's Lair Downloader</h1>
+              <p className="text-purple-100 mt-1">Browse and download retro games</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <SettingsMenu />
+            </div>
+          </div>
       </header>
 
       {/* Main content */}
@@ -129,7 +136,7 @@ function App() {
               />
             )}
 
-            <GamesList games={games} processedIds={processedIds} />
+            <GamesList games={games} processedIds={processedIds} folder={selectedConsole?.folder} />
 
             <ProcessedList />
           </>

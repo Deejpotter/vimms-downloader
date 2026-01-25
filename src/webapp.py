@@ -296,8 +296,12 @@ def api_index_build():
 
 @app.route('/api/index/progress', methods=['GET'])
 def api_index_progress():
-    """Get current progress of index build operation."""
-    return jsonify(INDEX_PROGRESS)
+    """Get current progress of index build operation and resync status."""
+    # Ensure resync keys exist
+    prog = dict(INDEX_PROGRESS)
+    prog.setdefault('resync_in_progress', False)
+    prog.setdefault('resync_partial_consoles', [])
+    return jsonify(prog)
 
 
 @app.route('/api/index/get', methods=['GET'])
@@ -327,6 +331,9 @@ def api_index_get():
         if 'complete' not in CACHED_INDEX:
             CACHED_INDEX['complete'] = True  # Assume old indexes are complete
         
+        # Compute missing consoles for convenience
+        missing = _find_missing_consoles(CACHED_INDEX.get('workspace_root', ''), CACHED_INDEX)
+        CACHED_INDEX['missing_consoles'] = missing
         return jsonify(CACHED_INDEX)
     except Exception as e:
         logger.exception(f"api_index_get: error loading index file: {e}")
@@ -338,6 +345,179 @@ def api_index_refresh():
     """Refresh the index by re-scanning the workspace root from existing cache."""
     global CACHED_INDEX
     
+
+def _find_missing_consoles(root_path: Path, index_data: dict) -> dict:
+    """Return a dict describing consoles missing or partially indexed.
+
+    Returns:
+      {
+        'missing_on_disk': [names],    # present on disk but not in index
+        'partial_in_index': [names],   # present in index but appear incomplete
+        'to_resync': [names]           # union of both lists
+      }
+
+    A console is identified by folder name vs keys in CONSOLE_MAP (case-insensitive).
+    """
+    consoles_on_disk = []
+    try:
+        p = Path(root_path)
+        for child in p.iterdir():
+            if child.is_dir() and child.name.upper() in CONSOLE_MAP:
+                consoles_on_disk.append(child.name.upper())
+    except Exception:
+        logger.exception(f"_find_missing_consoles: error scanning root '{root_path}'")
+
+    indexed_entries = (index_data or {}).get('consoles', [])
+    indexed_names = [c.get('name').upper() for c in indexed_entries if c.get('name')]
+
+    # Missing consoles: on disk but not indexed
+    missing_on_disk = [c for c in consoles_on_disk if c not in indexed_names]
+
+    # Partial consoles: indexed but with zero or very low total game counts
+    partial_in_index = []
+    for c in indexed_entries:
+        name = c.get('name')
+        try:
+            total_games = 0
+            for sec in (c.get('sections') or {}).values():
+                if isinstance(sec, list):
+                    total_games += len(sec)
+                elif isinstance(sec, int):
+                    total_games += sec
+            if total_games == 0 or total_games < 10:
+                partial_in_index.append(name.upper())
+        except Exception:
+            continue
+
+    # Build resync list
+    to_resync = sorted(list(set(missing_on_disk + partial_in_index)))
+
+    return {
+        'missing_on_disk': missing_on_disk,
+        'partial_in_index': partial_in_index,
+        'to_resync': to_resync
+    }
+
+
+def _scan_console_and_append(index_data: dict, console_name: str, root_path: Path) -> dict:
+    """Scan a single console folder and append the console entry to index_data.
+
+    Returns the created console_entry dict.
+    """
+    global INDEX_PROGRESS
+    console_folder = Path(root_path) / console_name
+    # Prefer ROMs subfolder
+    roms_folder = console_folder / 'ROMs'
+    target_folder = roms_folder if roms_folder.exists() and roms_folder.is_dir() else console_folder
+
+    try:
+        dl = VimmsDownloader(str(target_folder), system=console_name, detect_existing=True, pre_scan=True)
+        DL_INSTANCES[str(target_folder)] = dl
+        sections_data = {}
+        for idx, section in enumerate(SECTIONS):
+            INDEX_PROGRESS['current_section'] = section
+            INDEX_PROGRESS['sections_done'] = idx
+            games = dl.get_game_list_from_section(section)
+            # Annotate presence
+            annotated_games = []
+            for game in games:
+                present = False
+                try:
+                    if dl.local_index is not None:
+                        matches = dl.find_all_matching_files(game['name'])
+                        present = bool(matches)
+                except Exception:
+                    present = False
+                annotated_games.append(game)
+            sections_data[section] = annotated_games
+        console_entry = {
+            'name': console_name,
+            'system': CONSOLE_MAP.get(console_name, console_name),
+            'folder': str(target_folder),
+            'sections': {k: [g for g in v] for k, v in sections_data.items()}
+        }
+        index_data['consoles'].append(console_entry)
+        # Save incrementally
+        try:
+            with open(INDEX_FILE, 'w', encoding='utf-8') as f:
+                json.dump(index_data, f, indent=2)
+        except Exception:
+            logger.exception('Error saving incremental index for console %s', console_name)
+        return console_entry
+    except Exception as e:
+        logger.exception(f"_scan_console_and_append: error scanning console '{console_name}': {e}")
+        return None
+
+
+@app.route('/api/index/resync', methods=['POST'])
+def api_index_resync():
+    """Resync missing consoles or selected consoles. Supports dry-run (no changes) and apply.
+
+    Payload:
+      {
+        "mode": "dry" | "apply",
+        "consoles": ["DS", "GBA"]  # optional, if omitted compute missing consoles
+      }
+
+    If mode == 'apply' this will run scans for the specified consoles and append them to the index incrementally.
+    Returns the list of consoles affected and a status.
+    """
+    global CACHED_INDEX, INDEX_PROGRESS
+    data = request.json or {}
+    mode = data.get('mode', 'dry')
+    consoles = data.get('consoles')
+
+    # Ensure index exists
+    if not INDEX_FILE.exists():
+        return jsonify({'error': 'No index found to resync, please initialize index first.'}), 400
+
+    try:
+        with open(INDEX_FILE, 'r', encoding='utf-8') as f:
+            index_data = json.load(f)
+    except Exception as e:
+        logger.exception(f"api_index_resync: failed to read index file: {e}")
+        return jsonify({'error': 'Failed to read index file'}), 500
+
+    root = index_data.get('workspace_root') or ''
+
+    if not consoles:
+        findings = _find_missing_consoles(root, index_data)
+        consoles = findings.get('to_resync', [])
+
+    if mode == 'dry':
+        # Return categorized results
+        findings = _find_missing_consoles(root, index_data)
+        return jsonify({'mode': 'dry', 'missing_on_disk': findings.get('missing_on_disk', []), 'partial_in_index': findings.get('partial_in_index', []), 'to_resync': findings.get('to_resync', [])})
+
+    # mode == 'apply' -> start resync in background so API returns immediately
+    def _resync_worker(items, root_path):
+        logger.info(f"api_index_resync: starting resync for consoles: {items}")
+        INDEX_PROGRESS['resync_in_progress'] = True
+        INDEX_PROGRESS['resync_partial_consoles'] = []
+        for c in items:
+            try:
+                idx_entry = _scan_console_and_append(index_data, c, Path(root_path))
+                if idx_entry:
+                    INDEX_PROGRESS['resync_partial_consoles'].append(idx_entry)
+                    INDEX_PROGRESS['consoles_done'] = len(index_data['consoles'])
+            except Exception:
+                logger.exception(f"api_index_resync: error resyncing console {c}")
+        # Mark complete flag depending on whether missing consoles remain
+        missing_after = _find_missing_consoles(root_path, index_data)
+        index_data['complete'] = False if missing_after else True
+        try:
+            with open(INDEX_FILE, 'w', encoding='utf-8') as f:
+                json.dump(index_data, f, indent=2)
+        except Exception:
+            logger.exception('api_index_resync: failed to write final index file')
+        INDEX_PROGRESS['resync_in_progress'] = False
+        INDEX_PROGRESS['resync_partial_consoles'] = []
+        logger.info('api_index_resync: resync worker complete')
+
+    t = Thread(target=_resync_worker, args=(consoles, root), daemon=True)
+    t.start()
+
+    return jsonify({'status': 'resync_started', 'consoles': consoles}), 202
     # Get workspace root from existing cache
     if not INDEX_FILE.exists():
         return jsonify({'error': 'No existing index to refresh. Please build initial index first.'}), 404
@@ -541,8 +721,53 @@ def api_game(game_id):
         score, votes = pop
         pop_obj = {'score': score, 'votes': votes, 'rounded_score': int(round(score))}
 
-    logger.info(f"api_game: id={game_id} folder={folder} title='{title[:60]}' present={present} files={len(files)}")
-    return jsonify({'game_id': game_id, 'title': title, 'popularity': pop_obj, 'present': present, 'files': files})
+    # Try to resolve download URL and fetch size/extension if possible
+    size_bytes = None
+    extension = None
+    try:
+        if dl and title:
+            # Attempt to find download form on page and resolve URL
+            # Re-fetch page if resp not available
+            if not resp:
+                try:
+                    resp = dl.session.get(url, timeout=10)
+                except Exception:
+                    resp = None
+            if resp:
+                from downloader_lib.parse import resolve_download_form
+                download_url = resolve_download_form(resp.text, dl.session, url, game_id, getattr(dl, 'logger', None))
+                if download_url:
+                    # HEAD the download URL to get size and filename
+                    try:
+                        head = dl.session.head(download_url, allow_redirects=True, timeout=10)
+                        head.raise_for_status()
+                        cl = head.headers.get('Content-Length')
+                        if cl:
+                            size_bytes = int(cl)
+                        cd = head.headers.get('Content-Disposition') or ''
+                        # parse filename from content-disposition
+                        import re
+                        m = re.search(r'filename\*=.*\'\'([^;]+)|filename="?([^\";]+)"?', cd)
+                        fname = None
+                        if m:
+                            fname = (m.group(1) or m.group(2)) if m.group(1) or m.group(2) else None
+                        if not fname:
+                            # fallback to URL path
+                            from urllib.parse import urlparse, unquote
+                            p = urlparse(download_url).path
+                            fname = unquote(p.split('/')[-1] or '')
+                        if fname:
+                            import os
+                            _, ext = os.path.splitext(fname)
+                            if ext:
+                                extension = ext.lower()
+                    except Exception:
+                        pass
+    except Exception:
+        logger.exception('api_game: error resolving download details')
+
+    logger.info(f"api_game: id={game_id} folder={folder} title='{title[:60]}' present={present} files={len(files)} size={size_bytes} ext={extension}")
+    return jsonify({'game_id': game_id, 'title': title, 'popularity': pop_obj, 'present': present, 'files': files, 'size_bytes': size_bytes, 'extension': extension})
 
 
 @app.route('/api/queue', methods=['POST'])

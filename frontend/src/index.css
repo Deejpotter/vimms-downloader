@@ -1,3 +1,15 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Dark mode base styles */
+@layer base {
+  html { background-color: theme('colors.gray.50'); }
+  @media (prefers-color-scheme: dark) {
+    html { background-color: #0f172a; }
+    body { color: #e6eef8; }
+    .bg-white { background-color: #0b1220; }
+    .text-gray-600 { color: #94a3b8; }
+    .bg-gray-100 { background-color: #0b1220; }
+  }
+}

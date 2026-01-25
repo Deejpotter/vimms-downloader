@@ -49,6 +49,22 @@ export async function getSectionGames(consoleKey, section) {
   return res.json();
 }
 
+export async function resyncIndex(payload) {
+  const res = await fetch(`${API_BASE}/index/resync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok && res.status !== 202) throw new Error(`Failed to resync: ${res.statusText}`);
+  return res.json();
+}
+
+export async function getGameDetails(gameId, folder) {
+  const res = await fetch(`${API_BASE}/game/${encodeURIComponent(gameId)}?folder=${encodeURIComponent(folder)}`);
+  if (!res.ok) throw new Error(`Failed to get game details: ${res.statusText}`);
+  return res.json();
+}
+
 /**
  * Add game to download queue
  */

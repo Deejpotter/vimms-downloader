@@ -7,6 +7,12 @@ This file tracks the work planned and completed for this repository. Keep the mo
 - [ ] (Todo) Fix README reference: `requirements_vimms.txt` vs `requirements.txt` (update docs or add the file)
 - [ ] (Todo) Add integration tests for `VimmsDownloader.get_game_list_from_section` using recorded HTML fixtures
 - [ ] (In Progress) Add settings UI with "Resync" option + partial resync logic (auto-detect missing consoles and resync only those) — 2026-01-25
+- [ ] (Todo) Improve Settings dropdown styles and dark mode support — 2026-01-25
+- [ ] (Todo) Add Tailwind dark mode (system preference) and update UI colors — 2026-01-25
+- [ ] (Todo) Improve missing/partial detection (case-insensitive + partial thresholds) and selective resync — 2026-01-25
+- [ ] (Todo) Add game detail endpoint (size/format) and fetch details on game listing — 2026-01-25
+- [ ] (Todo) Display download indicator (local files) and popularity/stars on game rows — 2026-01-25
+- [ ] (Todo) Add unit tests for resync and missing detection logic — 2026-01-25
 
 - NOTE: Per owner preference, do NOT add CI workflows. Keep tests local and lightweight; run with `pytest` locally. If you want CI later, open a new TODO.
 
