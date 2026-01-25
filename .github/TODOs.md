@@ -6,13 +6,19 @@ This file tracks the work planned and completed for this repository. Keep the mo
 - [x] (Completed) Add unit tests for `_clean_filename` and `_normalize_for_match` (small cases, edge cases) — 2026-01-24
 - [ ] (Todo) Fix README reference: `requirements_vimms.txt` vs `requirements.txt` (update docs or add the file)
 - [ ] (Todo) Add integration tests for `VimmsDownloader.get_game_list_from_section` using recorded HTML fixtures
-- [ ] (In Progress) Add settings UI with "Resync" option + partial resync logic (auto-detect missing consoles and resync only those) — 2026-01-25
-- [ ] (Todo) Improve Settings dropdown styles and dark mode support — 2026-01-25
-- [ ] (Todo) Add Tailwind dark mode (system preference) and update UI colors — 2026-01-25
-- [ ] (Todo) Improve missing/partial detection (case-insensitive + partial thresholds) and selective resync — 2026-01-25
-- [ ] (Todo) Add game detail endpoint (size/format) and fetch details on game listing — 2026-01-25
-- [ ] (Todo) Display download indicator (local files) and popularity/stars on game rows — 2026-01-25
-- [ ] (Todo) Add unit tests for resync and missing detection logic — 2026-01-25
+- [x] (Completed) Add settings UI with "Resync" option + partial resync logic (auto-detect missing consoles and resync only those) — 2026-01-25
+- [x] (Completed) Improve Settings dropdown styles and dark mode support — 2026-01-25
+- [x] (Completed) Add Tailwind dark mode (system preference) and update UI colors — 2026-01-25
+- [x] (Completed) Improve missing/partial detection (case-insensitive + partial thresholds) and selective resync — 2026-01-25
+- [x] (Completed) Add game detail endpoint (size/format) and fetch details on game listing — 2026-01-25
+- [x] (Completed) Display download indicator (local files) and popularity/stars on game rows — 2026-01-25
+- [ ] (In Progress) Add unit tests for resync and missing detection logic (expand coverage; add resync worker tests) — 2026-01-25
+- [ ] (Todo) Add Admin UI to view/edit `vimms_config.json` (realtime edit, save, backup) — 2026-01-25
+- [ ] (Todo) Add drag-and-drop reordering of consoles in Admin UI to set `priority` and save to config — 2026-01-25
+- [x] (Completed) Add backend config endpoints: GET `/api/config`, POST `/api/config/save`, POST `/api/config/create_folders` — 2026-01-25
+- [x] (Completed) Add create-on-init and create-configured-console-folder behavior in `/api/init` — 2026-01-25
+- [ ] (Todo) Add unit tests for config endpoints and folder creation — 2026-01-25
+- [ ] (Todo) Add UI for 'Create configured folders' with preview and confirm — 2026-01-25
 
 - NOTE: Per owner preference, do NOT add CI workflows. Keep tests local and lightweight; run with `pytest` locally. If you want CI later, open a new TODO.
 
@@ -143,6 +149,7 @@ Priority C — Nice-to-have / packaging / docs
   - Component-based architecture with custom hooks
   
   **Component Hierarchy:**
+
   ```
   App
   ├── WorkspaceInit (initialization panel)
@@ -156,12 +163,14 @@ Priority C — Nice-to-have / packaging / docs
   **Detailed Implementation Steps:**
   
   ### Step 1: Initialize React + Tailwind Project
+
   - [ ] 1.1. Stop Flask server: `pkill -9 -f "python.*webapp.py"`
   - [ ] 1.2. Create frontend directory: `mkdir -p frontend && cd frontend`
   - [ ] 1.3. Initialize Vite + React: `npm create vite@latest . -- --template react`
   - [ ] 1.4. Install Tailwind: `npm install -D tailwindcss postcss autoprefixer`
   - [ ] 1.5. Initialize Tailwind: `npx tailwindcss init -p`
   - [ ] 1.6. Configure `tailwind.config.js`:
+
     ```js
     export default {
       content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
@@ -169,13 +178,17 @@ Priority C — Nice-to-have / packaging / docs
       plugins: [],
     }
     ```
+
   - [ ] 1.7. Add Tailwind directives to `src/index.css`:
+
     ```css
     @tailwind base;
     @tailwind components;
     @tailwind utilities;
     ```
+
   - [ ] 1.8. Configure Flask API proxy in `vite.config.js`:
+
     ```js
     export default defineConfig({
       server: {
@@ -190,7 +203,9 @@ Priority C — Nice-to-have / packaging / docs
     ```
   
   ### Step 2: Create API Service Layer
+
   - [ ] 2.1. Create `frontend/src/services/api.js`:
+
     ```js
     const API_BASE = '/api';
     
@@ -217,6 +232,7 @@ Priority C — Nice-to-have / packaging / docs
     ```
   
   - [ ] 2.2. Create custom hook `frontend/src/hooks/useIndexBuilder.js`:
+
     ```js
     export function useIndexBuilder() {
       const [progress, setProgress] = useState(null);
@@ -248,6 +264,7 @@ Priority C — Nice-to-have / packaging / docs
     ```
   
   ### Step 3: Implement Core Components
+
   - [ ] 3.1. Create `frontend/src/components/WorkspaceInit.jsx`:
     - Input for workspace root path
     - "Initialize Index" and "Refresh Index" buttons
@@ -285,6 +302,7 @@ Priority C — Nice-to-have / packaging / docs
     - Link to local file path
   
   ### Step 4: Implement Progressive UI Updates
+
   - [ ] 4.1. Use `useIndexBuilder` hook in main App component
   - [ ] 4.2. Pass `consoles` array to ConsoleGrid (updates automatically on state change)
   - [ ] 4.3. Auto-select first console when `consoles.length > 0 && !selectedConsole`
@@ -293,6 +311,7 @@ Priority C — Nice-to-have / packaging / docs
   - [ ] 4.6. Show spinner/loading indicator while `isBuilding === true`
   
   ### Step 5: Add Tailwind Styling
+
   - [ ] 5.1. Header: Purple gradient background (`bg-gradient-to-r from-purple-600 to-indigo-600`)
   - [ ] 5.2. Console buttons: Grid layout, hover effects, active state highlighting
   - [ ] 5.3. Section browser: Responsive grid (3-6 columns based on screen size)
@@ -302,7 +321,9 @@ Priority C — Nice-to-have / packaging / docs
   - [ ] 5.7. Responsive design: Mobile-first breakpoints (sm, md, lg, xl)
   
   ### Step 6: Build Configuration & Flask Integration
+
   - [ ] 6.1. Update Flask `webapp.py` to serve from `webui_static/dist`:
+
     ```python
     app = Flask(__name__, 
                 static_folder='webui_static/dist',
@@ -314,6 +335,7 @@ Priority C — Nice-to-have / packaging / docs
     ```
   
   - [ ] 6.2. Add `.env` file for frontend:
+
     ```
     VITE_API_BASE_URL=http://127.0.0.1:8000/api
     ```
@@ -325,6 +347,7 @@ Priority C — Nice-to-have / packaging / docs
     - Production: `npm run build` then start Flask server
   
   ### Step 7: Testing & Validation
+
   - [ ] 7.1. Test progressive updates: Start index build, verify consoles appear one-by-one
   - [ ] 7.2. Test section count updates: Confirm counts update while console is selected
   - [ ] 7.3. Test console selection: Click different consoles, verify sections reload
