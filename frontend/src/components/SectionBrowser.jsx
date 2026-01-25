@@ -34,8 +34,8 @@ export function SectionBrowser({ selectedConsole, onGamesLoad }) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-xl font-semibold mb-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+      <h2 className="text-xl font-semibold dark:text-white mb-4">
         Browse {selectedConsole.name} Sections
       </h2>
       <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
@@ -52,10 +52,10 @@ export function SectionBrowser({ selectedConsole, onGamesLoad }) {
               className={`
                 px-3 py-2 rounded-lg font-medium text-sm transition-all
                 ${isSelected
-                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md'
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 dark:from-purple-800 dark:to-indigo-900 text-white shadow-md'
                   : isEmpty
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-sm'
+                  ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 hover:shadow-sm'
                 }
               `}
             >
@@ -66,7 +66,7 @@ export function SectionBrowser({ selectedConsole, onGamesLoad }) {
         })}
       </div>
       {loading && (
-        <div className="mt-4 text-center text-gray-500">
+        <div className="mt-4 text-center text-gray-500 dark:text-gray-400">
           Loading games...
         </div>
       )}

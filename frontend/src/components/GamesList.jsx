@@ -1,5 +1,3 @@
-import { addToQueue } from '../services/api';
-
 import { useEffect, useState } from 'react';
 import { addToQueue, getGameDetails } from '../services/api';
 
@@ -39,49 +37,55 @@ export function GamesList({ games, processedIds = [], folder }) {
 
   if (!games || games.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <p className="text-gray-500 text-center">Select a section to view games</p>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <p className="text-gray-500 dark:text-gray-400 text-center">Select a section to view games</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-semibold mb-4">Games ({games.length})</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+      <h2 className="text-xl font-semibold dark:text-white mb-4">Games ({games.length})</h2>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-200">
-              <th className="text-left py-3 px-4">Title</th>
-              <th className="text-left py-3 px-4">Size</th>
-              <th className="text-left py-3 px-4">Format</th>
-              <th className="text-left py-3 px-4">Rating</th>
-              <th className="text-right py-3 px-4">Action</th>
+            <tr className="border-b border-gray-200 dark:border-gray-700">
+              <th className="text-left py-3 px-4 dark:text-gray-300">Title</th>
+              <th className="text-left py-3 px-4 dark:text-gray-300">Size</th>
+              <th className="text-left py-3 px-4 dark:text-gray-300">Format</th>
+              <th className="text-left py-3 px-4 dark:text-gray-300">Rating</th>
+              <th className="text-center py-3 px-4 dark:text-gray-300">Downloaded</th>
             </tr>
           </thead>
           <tbody>
             {enriched.map((game, idx) => {
               const idVal = game.game_id || game.id || idx;
               const isProcessed = processedIds.includes(idVal);
+              const isPresent = game.present === true; // Explicitly check for true
               const size = game.size_bytes ? `${(game.size_bytes / (1024*1024)).toFixed(2)} MB` : (game.size_bytes === 0 ? '0 B' : '-');
               const ext = game.extension || '-';
               return (
                 <tr
                   key={idVal}
-                  className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}
+                  className={`border-b border-gray-100 dark:border-gray-700 ${idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-700' : 'bg-white dark:bg-gray-800'}`}
                 >
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
-                      <div className="font-medium text-sm">{game.title || game.name}</div>
-                      {isProcessed && (
-                        <span className="text-green-500" title="Already downloaded">
+                      <div className="font-medium text-sm dark:text-white">{game.title || game.name}</div>
+                      {isPresent && (
+                        <span className="text-green-500 dark:text-green-400" title="Game files found on disk">
                           ✓
+                        </span>
+                      )}
+                      {isProcessed && !isPresent && (
+                        <span className="text-blue-500 dark:text-blue-400" title="Recently downloaded">
+                          ↓
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-gray-600">{size}</td>
-                  <td className="py-3 px-4 text-gray-600">{ext}</td>
+                  <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{size}</td>
+                  <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{ext}</td>
                   <td className="py-3 px-4">
                     {game.popularity && game.popularity.rounded_score ? (
                       <span className="text-yellow-500">{Array.from({length: game.popularity.rounded_score}).map((_,i)=>'★').join('')}</span>
@@ -89,20 +93,27 @@ export function GamesList({ games, processedIds = [], folder }) {
                       <span className="text-gray-400">—</span>
                     )}
                   </td>
-                  <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => handleAddToQueue(game)}
-                      disabled={isProcessed}
-                      className={`
-                        px-4 py-1.5 rounded-lg text-sm font-medium transition-all
-                        ${isProcessed
-                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700'
-                        }
-                      `}
-                    >
-                      {isProcessed ? (game.files && game.files.length > 0 ? 'Downloaded' : 'Downloaded') : 'Add to Queue'}
-                    </button>
+                  <td className="py-3 px-4 text-center">
+                    {isPresent ? (
+                      <span className="text-green-500 dark:text-green-400 text-2xl font-bold" title="Downloaded">✓</span>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-red-500 dark:text-red-400 text-2xl font-bold" title="Not downloaded">✗</span>
+                        <button
+                          onClick={() => handleAddToQueue(game)}
+                          disabled={isProcessed}
+                          className={`
+                            px-3 py-1 rounded-lg text-sm font-medium transition-all
+                            ${isProcessed
+                              ? 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-purple-600 to-indigo-600 dark:from-purple-800 dark:to-indigo-900 text-white hover:from-purple-700 hover:to-indigo-700 hover:dark:from-purple-900 hover:dark:to-indigo-900'
+                            }
+                          `}
+                        >
+                          {isProcessed ? 'Queued' : 'Download'}
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               );

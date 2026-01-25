@@ -62,8 +62,11 @@ CONSOLE_MAP = {
     'DS': 'DS',
     'NDS': 'DS',
     'NES': 'NES',
+    'NINTENDO': 'NES',
     'SNES': 'SNES',
+    'SUPERNINTENDO': 'SNES',
     'N64': 'N64',
+    'NINTENDO64': 'N64',
     'GC': 'GameCube',
     'GAMECUBE': 'GameCube',
     'WII': 'Wii',
@@ -71,23 +74,53 @@ CONSOLE_MAP = {
     'GB': 'GB',
     'GAMEBOY': 'GB',
     'GBC': 'GBC',
+    'GAMEBOYCOLOR': 'GBC',
     'GBA': 'GBA',
+    'GAMEBOYADVANCE': 'GBA',
+    'GAMEBOYAD': 'GBA',
+    '3DS': '3DS',
+    'NINTENDO3DS': '3DS',
     'PS1': 'PS1',
     'PSX': 'PS1',
     'PLAYSTATION': 'PS1',
     'PS2': 'PS2',
+    'PLAYSTATION2': 'PS2',
     'PS3': 'PS3',
+    'PLAYSTATION3': 'PS3',
     'PSP': 'PSP',
+    'PSPPORTABLE': 'PSP',
     'GENESIS': 'Genesis',
     'MEGADRIVE': 'Genesis',
     'SMS': 'SMS',
     'MASTERSYSTEM': 'SMS',
+    'SEGACD': 'SegaCD',
+    'SCD': 'SegaCD',
+    'SEGA32X': 'Sega32X',
+    '32X': 'Sega32X',
     'SATURN': 'Saturn',
+    'SEGASATURN': 'Saturn',
     'DREAMCAST': 'Dreamcast',
     'DC': 'Dreamcast',
+    'GAMEGEAR': 'GameGear',
+    'GG': 'GameGear',
     'XBOX': 'Xbox',
+    'XBOX360': 'Xbox360',
+    'XBOX360DIGITAL': 'Xbox360',
     'ATARI2600': 'Atari2600',
+    'ATARI5200': 'Atari5200',
     'ATARI7800': 'Atari7800',
+    'TURBOGRAFX16': 'TurboGrafx16',
+    'TURBOGRAFX-16': 'TurboGrafx16',
+    'TG16': 'TurboGrafx16',
+    'TURBOGRAFXCD': 'TurboGrafxCD',
+    'TGCD': 'TurboGrafxCD',
+    'CDI': 'CDi',
+    'CD-I': 'CDi',
+    'JAGUAR': 'Jaguar',
+    'JAGUARCD': 'JaguarCD',
+    'VB': 'VirtualBoy',
+    'VIRTUALBOY': 'VirtualBoy',
+    'LYNX': 'Lynx',
 }
 
 # Default archive extension when Content-Disposition filename is missing.
@@ -362,6 +395,12 @@ class VimmsDownloader:
                 page_num += 1
                 self._random_delay(self.delay_between_page_requests)
                 
+            except requests.exceptions.HTTPError as e:
+                # 404 on page 2+ is expected when section has only 1 page
+                if page_num > 1 and '404' in str(e):
+                    break
+                print(f"  ✗ Error fetching section '{section}' page {page_num}: {e}")
+                break
             except Exception as e:
                 print(f"  ✗ Error fetching section '{section}' page {page_num}: {e}")
                 break

@@ -13,13 +13,19 @@ How to run (developer workflow) 🔧
 
 - **Web UI (recommended)**:
   python src/webapp.py
+
   # Visit http://127.0.0.1:8000
 
 - **Web UI development** (React hot reload):
+
   # Terminal 1: Flask backend
+
   python src/webapp.py
+
   # Terminal 2: Vite dev server
+
   cd frontend && yarn dev
+
   # Visit http://localhost:5173
 
 - Install dependencies in a venv (see `README.md`):

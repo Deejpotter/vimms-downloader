@@ -68,8 +68,8 @@ yarn install  # first time only
 yarn dev
 ```
 
-- Development server: http://localhost:5173 (hot reload enabled)
-- Flask API: http://127.0.0.1:8000/api/*
+- Development server: <http://localhost:5173> (hot reload enabled)
+- Flask API: <http://127.0.0.1:8000/api/>*
 - Vite automatically proxies API calls to Flask
 
 **Building for production:**

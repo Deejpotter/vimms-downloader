@@ -8,6 +8,40 @@ import requests
 BASE_URL = "https://vimm.net"
 DOWNLOAD_BASE = "https://dl2.vimm.net"
 
+def parse_game_details(html_content: str) -> Dict[str, any]:
+    """Parse game details (size, format, rating) from game page HTML."""
+    soup = BeautifulSoup(html_content, 'html.parser')
+    details = {}
+    
+    # Find size and format in the download form or nearby text
+    size_match = re.search(r'([0-9.]+)\s*(MB|GB|KB)', html_content, re.IGNORECASE)
+    if size_match:
+        size_value = float(size_match.group(1))
+        size_unit = size_match.group(2).upper()
+        # Convert to bytes
+        multipliers = {'KB': 1024, 'MB': 1024**2, 'GB': 1024**3}
+        details['size_bytes'] = int(size_value * multipliers.get(size_unit, 1))
+        details['size_display'] = f"{size_match.group(1)} {size_unit}"
+    
+    # Find format/extension from mediaId or file type indicators
+    format_match = re.search(r'\.([a-z0-9]{2,5})\b', html_content, re.IGNORECASE)
+    if format_match:
+        details['extension'] = format_match.group(1).lower()
+    
+    # Find rating (star icons or score)
+    rating_container = soup.find('div', class_=re.compile(r'rating|score', re.I))
+    if rating_container:
+        stars = len(rating_container.find_all('img', src=re.compile(r'star', re.I)))
+        if stars > 0:
+            details['rating'] = stars
+    else:
+        # Look for text-based rating
+        rating_text = re.search(r'(\d+(\.\d+)?)\s*(?:out of|/)\s*\d+', html_content)
+        if rating_text:
+            details['rating'] = float(rating_text.group(1))
+    
+    return details
+
 def parse_games_from_section(html_content: str, section: str) -> List[Dict[str, str]]:
     """Parse a list of games from the HTML of a section page."""
     games = []

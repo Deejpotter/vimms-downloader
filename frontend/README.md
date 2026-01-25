@@ -33,8 +33,8 @@ cd frontend
 yarn dev
 ```
 
-- Frontend dev server: http://localhost:5173
-- Flask API backend: http://127.0.0.1:8000
+- Frontend dev server: <http://localhost:5173>
+- Flask API backend: <http://127.0.0.1:8000>
 - The Vite dev server proxies `/api/*` requests to Flask automatically
 
 ### Production Build
@@ -54,7 +54,7 @@ source .venv/Scripts/activate
 python src/webapp.py
 ```
 
-Visit http://127.0.0.1:8000 to use the app.
+Visit <http://127.0.0.1:8000> to use the app.
 
 ## Project Structure
 
@@ -84,6 +84,7 @@ frontend/
 ### Progressive Updates
 
 The UI updates progressively as the index is built:
+
 - Console buttons appear as they're scanned
 - Section counts update in real-time
 - Progress bar shows overall completion
@@ -110,6 +111,7 @@ The UI updates progressively as the index is built:
 Theme: Purple gradient (`from-purple-600 to-indigo-600`)
 
 All components use Tailwind utility classes for styling. Key patterns:
+
 - Gradient backgrounds for primary actions
 - Gray scale for secondary UI
 - Hover and active states for interactivity
@@ -138,6 +140,7 @@ Build warnings about unknown at-rules are harmless and can be ignored. These are
 ### React build not found
 
 If you see "React build not found" error:
+
 ```bash
 cd frontend
 yarn build
