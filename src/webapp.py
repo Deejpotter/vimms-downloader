@@ -14,6 +14,7 @@ import json
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.download_vimms import VimmsDownloader, CONSOLE_MAP, SECTIONS
+from downloader_lib.parse import parse_game_details
 
 # Try to import metadata functionality (optional)
 try:
@@ -165,15 +166,50 @@ def api_index_build():
     
     logger.info(f"api_index_build: starting full scan of '{workspace_root}'")
     
-    # Scan for console folders
+    # Scan for console folders - both on disk and in config
     from src.download_vimms import CONSOLE_MAP
-    console_folders = []
+    console_folders_set = set()
+    
+    # STEP 1: Create ALL configured folders FIRST
+    logger.info("api_index_build: STEP 1 - Creating all configured console folders...")
+    try:
+        config_path = Path('vimms_config.json')
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            for folder_key in config.get('folders', {}).keys():
+                if folder_key in CONSOLE_MAP:
+                    console_folder = root_path / folder_key
+                    if not console_folder.exists():
+                        try:
+                            console_folder.mkdir(parents=True, exist_ok=True)
+                            logger.info(f"api_index_build: created folder '{folder_key}' at '{console_folder}'")
+                        except Exception as e:
+                            logger.warning(f"api_index_build: failed to create '{folder_key}': {e}")
+                    # Also create ROMs subfolder
+                    roms_folder = console_folder / 'ROMs'
+                    if not roms_folder.exists():
+                        try:
+                            roms_folder.mkdir(parents=True, exist_ok=True)
+                            logger.info(f"api_index_build: created ROMs subfolder for '{folder_key}'")
+                        except Exception as e:
+                            logger.warning(f"api_index_build: failed to create ROMs subfolder for '{folder_key}': {e}")
+                    console_folders_set.add(folder_key)
+    except Exception as e:
+        logger.warning(f"api_index_build: could not load vimms_config.json: {e}")
+    
+    # STEP 2: Scan for any additional physical folders not in config
+    logger.info("api_index_build: STEP 2 - Scanning for additional physical folders...")
     for child in root_path.iterdir():
         if child.is_dir() and child.name in CONSOLE_MAP:
-            console_folders.append(child)
+            if child.name not in console_folders_set:
+                logger.info(f"api_index_build: found additional physical folder '{child.name}'")
+            console_folders_set.add(child.name)
+    
+    console_folders = sorted(list(console_folders_set))
     
     if not console_folders:
-        return jsonify({'error': 'No console folders found in workspace root'}), 404
+        return jsonify({'error': 'No console folders found in workspace root or config'}), 404
     
     # Initialize progress
     INDEX_PROGRESS['in_progress'] = True
@@ -184,7 +220,7 @@ def api_index_build():
     INDEX_PROGRESS['games_found'] = 0
     INDEX_PROGRESS['partial_consoles'] = []
     
-    logger.info(f"api_index_build: found {len(console_folders)} console folders: {[c.name for c in console_folders]}")
+    logger.info(f"api_index_build: found {len(console_folders)} console folders: {console_folders}")
     
     # Build index
     index_data = {
@@ -195,13 +231,38 @@ def api_index_build():
     }
     
     total_games = 0
-    for console_folder in console_folders:
-        console_name = console_folder.name
+    for console_name in console_folders:
         system = CONSOLE_MAP.get(console_name, console_name)
         
         # Update progress
         INDEX_PROGRESS['current_console'] = console_name
         INDEX_PROGRESS['sections_done'] = 0
+        
+        # Check if folder exists on disk
+        console_folder = root_path / console_name
+        if not console_folder.exists():
+            # Auto-create missing console folders
+            try:
+                console_folder.mkdir(parents=True, exist_ok=True)
+                logger.info(f"api_index_build: created missing folder '{console_folder}'")
+                # Also create ROMs subfolder
+                roms_folder = console_folder / 'ROMs'
+                roms_folder.mkdir(parents=True, exist_ok=True)
+                logger.info(f"api_index_build: created ROMs subfolder '{roms_folder}'")
+            except Exception as e:
+                logger.warning(f"api_index_build: could not create folder '{console_folder}': {e}")
+                # Create placeholder entry for folders we couldn't create
+                console_entry = {
+                    'name': console_name,
+                    'system': system,
+                    'folder': str(console_folder),
+                    'sections': {},
+                    'total_games': 0,
+                    'exists': False
+                }
+                index_data['consoles'].append(console_entry)
+                INDEX_PROGRESS['consoles_done'] += 1
+                continue
         
         # Prefer ROMs subfolder
         roms_folder = console_folder / 'ROMs'
@@ -214,6 +275,13 @@ def api_index_build():
             dl = VimmsDownloader(str(target_folder), system=system, detect_existing=True, pre_scan=True)
             DL_INSTANCES[str(target_folder)] = dl
             
+            # Manually trigger local index build since we're not calling download_games_from_sections
+            if dl.detect_existing and dl.pre_scan:
+                dl._build_local_index()
+                if dl.local_index is not None:
+                    count_files = sum(len(v) for v in dl.local_index.values())
+                    logger.info(f"api_index_build: pre-scanned {count_files} files for '{console_name}'")
+            
             # Scan all sections
             sections_data = {}
             for idx, section in enumerate(SECTIONS):
@@ -224,19 +292,25 @@ def api_index_build():
                     
                     # Annotate with local presence
                     annotated_games = []
+                    debug_count = 0
                     for game in games:
                         present = False
                         try:
                             if dl.local_index is not None:
                                 matches = dl.find_all_matching_files(game['name'])
                                 present = bool(matches)
-                        except Exception:
+                                # Debug log first few games in each section to see matching behavior
+                                if debug_count < 3:
+                                    logger.info(f"api_index_build: game='{game['name']}' present={present} matches={len(matches) if matches else 0}")
+                                    debug_count += 1
+                        except Exception as e:
+                            logger.exception(f"api_index_build: error checking '{game['name']}': {e}")
                             pass
                         
                         annotated_games.append({
-                            'id': game.get('id', ''),
+                            'id': game.get('game_id', ''),
                             'name': game.get('name', ''),
-                            'url': game.get('url', ''),
+                            'url': game.get('page_url', ''),
                             'present': present
                         })
                         total_games += 1
@@ -340,11 +414,571 @@ def api_index_get():
         return jsonify({'error': 'Failed to load index file'}), 500
 
 
+# Global paths for catalog cache
+REMOTE_CATALOG_FILE = BASE_DIR / 'webui_remote_catalog.json'
+REMOTE_CATALOG_PROGRESS = {
+    'in_progress': False,
+    'consoles_total': 0,
+    'consoles_done': 0,
+    'current_console': '',
+    'sections_done': 0,
+    'sections_total': len(SECTIONS),
+    'percent_complete': 0
+}
+
+
+@app.route('/api/catalog/remote/get', methods=['GET'])
+def api_catalog_remote_get():
+    """Return cached remote catalog if it exists."""
+    if not REMOTE_CATALOG_FILE.exists():
+        return jsonify({'error': 'No remote catalog cached. Please build it first.'}), 404
+    
+    try:
+        with open(REMOTE_CATALOG_FILE, 'r', encoding='utf-8') as f:
+            catalog = json.load(f)
+        return jsonify(catalog)
+    except Exception as e:
+        logger.exception(f"api_catalog_remote_get: error: {e}")
+        return jsonify({'error': 'Failed to load remote catalog'}), 500
+
+
+@app.route('/api/catalog/remote/progress', methods=['GET'])
+def api_catalog_remote_progress():
+    """Return progress of remote catalog building."""
+    return jsonify(REMOTE_CATALOG_PROGRESS)
+
+
+@app.route('/api/catalog/remote/build', methods=['POST'])
+def api_catalog_remote_build():
+    """Build remote game catalog by fetching from Vimm's Lair (one-time, slow operation).
+    
+    This fetches ALL game lists from Vimm's Lair and caches them locally.
+    Takes 15-30 minutes due to network requests but only needs to run once.
+    """
+    global REMOTE_CATALOG_PROGRESS
+    
+    if REMOTE_CATALOG_PROGRESS['in_progress']:
+        return jsonify({'error': 'Remote catalog build already in progress'}), 409
+    
+    logger.info("api_catalog_remote_build: starting remote catalog fetch")
+    
+    def build_remote_catalog():
+        """Background thread to fetch remote game catalog."""
+        global REMOTE_CATALOG_PROGRESS
+        from src.download_vimms import CONSOLE_MAP
+        
+        try:
+            REMOTE_CATALOG_PROGRESS['in_progress'] = True
+            REMOTE_CATALOG_PROGRESS['consoles_total'] = len(CONSOLE_MAP)
+            REMOTE_CATALOG_PROGRESS['consoles_done'] = 0
+            
+            catalog = {
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'consoles': {}
+            }
+            
+            console_keys = sorted(CONSOLE_MAP.keys())
+            
+            for console_idx, console_name in enumerate(console_keys):
+                system = CONSOLE_MAP[console_name]
+                REMOTE_CATALOG_PROGRESS['current_console'] = console_name
+                REMOTE_CATALOG_PROGRESS['sections_done'] = 0
+                
+                logger.info(f"api_catalog_remote_build: fetching '{console_name}' (system={system})")
+                
+                # Create temporary downloader just for fetching (no local folder needed)
+                temp_dir = BASE_DIR / 'temp_catalog'
+                temp_dir.mkdir(exist_ok=True)
+                dl = VimmsDownloader(str(temp_dir), system=system, detect_existing=False, pre_scan=False)
+                
+                sections_data = {}
+                for section_idx, section in enumerate(SECTIONS):
+                    REMOTE_CATALOG_PROGRESS['sections_done'] = section_idx
+                    REMOTE_CATALOG_PROGRESS['percent_complete'] = int(
+                        (console_idx * len(SECTIONS) + section_idx) / (len(CONSOLE_MAP) * len(SECTIONS)) * 100
+                    )
+                    
+                    try:
+                        games = dl.get_game_list_from_section(section)
+                        # Store game metadata without local presence info
+                        sections_data[section] = [
+                            {
+                                'id': g.get('game_id', ''),
+                                'name': g.get('name', ''),
+                                'url': g.get('page_url', '')
+                            }
+                            for g in games
+                        ]
+                        logger.info(f"api_catalog_remote_build: section '{section}' for '{console_name}': {len(games)} games")
+                    except Exception as e:
+                        logger.exception(f"api_catalog_remote_build: error fetching section '{section}' for '{console_name}': {e}")
+                        sections_data[section] = []
+                
+                catalog['consoles'][console_name] = {
+                    'name': console_name,
+                    'system': system,
+                    'sections': sections_data
+                }
+                
+                REMOTE_CATALOG_PROGRESS['consoles_done'] = console_idx + 1
+                REMOTE_CATALOG_PROGRESS['percent_complete'] = int((console_idx + 1) / len(CONSOLE_MAP) * 100)
+            
+            # Save catalog to disk
+            with open(REMOTE_CATALOG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(catalog, f, indent=2)
+            
+            logger.info(f"api_catalog_remote_build: saved remote catalog with {len(catalog['consoles'])} consoles")
+            
+        except Exception as e:
+            logger.exception(f"api_catalog_remote_build: failed: {e}")
+        finally:
+            REMOTE_CATALOG_PROGRESS['in_progress'] = False
+    
+    # Start background thread
+    thread = Thread(target=build_remote_catalog, daemon=True)
+    thread.start()
+    
+    return jsonify({'status': 'started', 'message': 'Remote catalog build started in background'})
+
+
+@app.route('/api/index/build_fast', methods=['POST'])
+def api_index_build_fast():
+    """Fast index build using cached remote catalog + local file scan.
+    
+    This is the FAST path - loads remote catalog from cache (instant) and only
+    scans local files for presence detection (milliseconds). Should complete in <1 second.
+    
+    Requires: Remote catalog must exist (build it once with /api/catalog/remote/build)
+    """
+    global CACHED_INDEX, DL_INSTANCES, INDEX_PROGRESS
+    
+    data = request.json or {}
+    workspace_root = data.get('workspace_root')
+    
+    if not workspace_root:
+        return jsonify({'error': 'workspace_root required'}), 400
+    
+    root_path = Path(workspace_root)
+    if not root_path.exists():
+        return jsonify({'error': f"Workspace root '{workspace_root}' not found"}), 404
+    
+    # Check if remote catalog exists
+    if not REMOTE_CATALOG_FILE.exists():
+        return jsonify({
+            'error': 'No remote catalog cached. Please build it first with /api/catalog/remote/build',
+            'hint': 'This is a one-time operation that takes 15-30 minutes.'
+        }), 404
+    
+    logger.info(f"api_index_build_fast: starting FAST scan of '{workspace_root}' using cached catalog")
+    
+    # Start build in background thread
+    def build_fast():
+        with app.app_context():
+            try:
+                api_index_build_fast_internal(workspace_root)
+            except Exception as e:
+                logger.exception(f"api_index_build_fast: error: {e}")
+    
+    thread = Thread(target=build_fast, daemon=True)
+    thread.start()
+    
+    return jsonify({'status': 'started', 'message': 'Fast index build started'})
+
+
+def api_index_build_fast_internal(workspace_root):
+    """Internal helper for fast index build using cached remote catalog."""
+    global CACHED_INDEX, DL_INSTANCES, INDEX_PROGRESS
+    from src.download_vimms import CONSOLE_MAP
+    
+    root_path = Path(workspace_root)
+    
+    # Load remote catalog
+    logger.info("api_index_build_fast_internal: loading cached remote catalog")
+    with open(REMOTE_CATALOG_FILE, 'r', encoding='utf-8') as f:
+        remote_catalog = json.load(f)
+    
+    # STEP 1: Create ALL configured console folders FIRST
+    logger.info("api_index_build_fast_internal: STEP 1 - Creating all configured console folders...")
+    folders_created = 0
+    folders_existed = 0
+    console_folders_set = set()
+    
+    try:
+        config_path = Path('vimms_config.json')
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            for folder_key in config.get('folders', {}).keys():
+                if folder_key in CONSOLE_MAP:
+                    console_folder = root_path / folder_key
+                    if not console_folder.exists():
+                        try:
+                            console_folder.mkdir(parents=True, exist_ok=True)
+                            folders_created += 1
+                            logger.info(f"api_index_build_fast_internal: created folder '{folder_key}'")
+                        except Exception as e:
+                            logger.warning(f"api_index_build_fast_internal: failed to create '{folder_key}': {e}")
+                    else:
+                        folders_existed += 1
+                    # Create ROMs subfolder
+                    roms_folder = console_folder / 'ROMs'
+                    if not roms_folder.exists():
+                        try:
+                            roms_folder.mkdir(parents=True, exist_ok=True)
+                        except Exception as e:
+                            logger.warning(f"api_index_build_fast_internal: failed to create ROMs for '{folder_key}': {e}")
+                    console_folders_set.add(folder_key)
+    except Exception as e:
+        logger.warning(f"api_index_build_fast_internal: could not load config: {e}")
+    
+    logger.info(f"api_index_build_fast_internal: Folders: {folders_created} created, {folders_existed} already existed")
+    
+    # STEP 2: Scan for additional physical folders
+    logger.info("api_index_build_fast_internal: STEP 2 - Scanning for additional physical folders...")
+    for child in root_path.iterdir():
+        if child.is_dir() and child.name in CONSOLE_MAP:
+            if child.name not in console_folders_set:
+                logger.info(f"api_index_build_fast_internal: found additional folder '{child.name}'")
+            console_folders_set.add(child.name)
+    
+    console_folders = sorted(list(console_folders_set))
+    
+    # Initialize progress
+    INDEX_PROGRESS['in_progress'] = True
+    INDEX_PROGRESS['consoles_total'] = len(console_folders)
+    INDEX_PROGRESS['consoles_done'] = 0
+    INDEX_PROGRESS['sections_total'] = len(SECTIONS)
+    INDEX_PROGRESS['sections_done'] = 0
+    INDEX_PROGRESS['games_found'] = 0
+    INDEX_PROGRESS['partial_consoles'] = []
+    
+    logger.info(f"api_index_build_fast_internal: STEP 3 - Fast scanning {len(console_folders)} consoles")
+    
+    # Build index
+    index_data = {
+        'workspace_root': str(root_path),
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'consoles': [],
+        'complete': False
+    }
+    
+    total_games = 0
+    for console_name in console_folders:
+        system = CONSOLE_MAP.get(console_name, console_name)
+        
+        INDEX_PROGRESS['current_console'] = console_name
+        INDEX_PROGRESS['sections_done'] = 0
+        
+        # Get console folder
+        console_folder = root_path / console_name
+        roms_folder = console_folder / 'ROMs'
+        target_folder = roms_folder if roms_folder.exists() else console_folder
+        
+        logger.info(f"api_index_build_fast_internal: scanning '{console_name}' at '{target_folder}'")
+        
+        try:
+            # Create downloader ONLY for local file scanning (FAST)
+            dl = VimmsDownloader(str(target_folder), system=system, detect_existing=True, pre_scan=True)
+            DL_INSTANCES[str(target_folder)] = dl
+            
+            # Build local index (FAST - milliseconds for thousands of files)
+            if dl.detect_existing and dl.pre_scan:
+                dl._build_local_index()
+                if dl.local_index is not None:
+                    count_files = sum(len(v) for v in dl.local_index.values())
+                    logger.info(f"api_index_build_fast_internal: pre-scanned {count_files} files for '{console_name}'")
+            
+            # Get remote game list from cached catalog (INSTANT - no network)
+            console_remote = remote_catalog['consoles'].get(console_name, {})
+            sections_data = {}
+            
+            for idx, section in enumerate(SECTIONS):
+                INDEX_PROGRESS['current_section'] = section
+                INDEX_PROGRESS['sections_done'] = idx
+                
+                # Get games from cached catalog (no network fetch!)
+                cached_games = console_remote.get('sections', {}).get(section, [])
+                
+                # Annotate with local presence (FAST - uses pre-built local index)
+                annotated_games = []
+                for game in cached_games:
+                    present = False
+                    try:
+                        if dl.local_index is not None:
+                            matches = dl.find_all_matching_files(game['name'])
+                            present = bool(matches)
+                    except Exception as e:
+                        logger.exception(f"api_index_build_fast_internal: error checking '{game['name']}': {e}")
+                    
+                    annotated_games.append({
+                        'id': game.get('id', ''),
+                        'name': game.get('name', ''),
+                        'url': game.get('url', ''),
+                        'present': present
+                    })
+                    total_games += 1
+                    INDEX_PROGRESS['games_found'] = total_games
+                
+                sections_data[section] = annotated_games
+            
+            # Create console entry
+            console_entry = {
+                'name': console_name,
+                'system': system,
+                'folder': str(console_folder),
+                'sections': sections_data,
+                'total_games': sum(len(s) for s in sections_data.values()),
+                'exists': True
+            }
+            index_data['consoles'].append(console_entry)
+            INDEX_PROGRESS['partial_consoles'].append(console_entry)
+            INDEX_PROGRESS['consoles_done'] += 1
+            
+            logger.info(f"api_index_build_fast_internal: completed '{console_name}' with {console_entry['total_games']} games")
+            
+            # Save incremental progress
+            try:
+                with open(INDEX_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(index_data, f, indent=2)
+            except Exception as e:
+                logger.exception(f"api_index_build_fast_internal: error saving progress: {e}")
+        
+        except Exception as e:
+            logger.exception(f"api_index_build_fast_internal: error scanning '{console_name}': {e}")
+    
+    # Mark as complete
+    index_data['complete'] = True
+    try:
+        with open(INDEX_FILE, 'w', encoding='utf-8') as f:
+            json.dump(index_data, f, indent=2)
+        CACHED_INDEX = index_data
+        INDEX_PROGRESS['in_progress'] = False
+        logger.info(f"api_index_build_fast_internal: saved complete index with {len(index_data['consoles'])} consoles, {total_games} total games")
+    except Exception as e:
+        logger.exception(f"api_index_build_fast_internal: error saving final index: {e}")
+
+
 @app.route('/api/index/refresh', methods=['POST'])
 def api_index_refresh():
     """Refresh the index by re-scanning the workspace root from existing cache."""
     global CACHED_INDEX
     
+    # Get workspace root from existing cache
+    if not INDEX_FILE.exists():
+        return jsonify({'error': 'No existing index to refresh. Please build initial index first.'}), 404
+    
+    try:
+        with open(INDEX_FILE, 'r', encoding='utf-8') as f:
+            old_index = json.load(f)
+        workspace_root = old_index.get('workspace_root')
+        
+        if not workspace_root:
+            return jsonify({'error': 'No workspace_root in existing index'}), 400
+        
+        logger.info(f"api_index_refresh: refreshing index for '{workspace_root}'")
+        
+        # Call build with stored workspace root
+        return api_index_build_internal(workspace_root)
+        
+    except Exception as e:
+        logger.exception(f"api_index_refresh: error: {e}")
+        return jsonify({'error': 'Failed to refresh index'}), 500
+
+
+def api_index_build_internal(workspace_root):
+    """Internal helper to build index (shared by build and refresh endpoints)."""
+    global CACHED_INDEX, DL_INSTANCES, INDEX_PROGRESS
+    
+    root_path = Path(workspace_root)
+    if not root_path.exists():
+        return jsonify({'error': f"Workspace root '{workspace_root}' not found"}), 404
+    
+    logger.info(f"api_index_build_internal: starting full scan of '{workspace_root}'")
+    
+    # Scan for console folders - both on disk and in config
+    from src.download_vimms import CONSOLE_MAP
+    console_folders_set = set()
+    
+    # STEP 1: Create ALL configured folders FIRST
+    logger.info("api_index_build_internal: STEP 1 - Creating all configured console folders...")
+    folders_created = 0
+    folders_existed = 0
+    try:
+        config_path = Path('vimms_config.json')
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            for folder_key in config.get('folders', {}).keys():
+                if folder_key in CONSOLE_MAP:
+                    console_folder = root_path / folder_key
+                    if not console_folder.exists():
+                        try:
+                            console_folder.mkdir(parents=True, exist_ok=True)
+                            folders_created += 1
+                            logger.info(f"api_index_build_internal: created folder '{folder_key}' at '{console_folder}'")
+                        except Exception as e:
+                            logger.warning(f"api_index_build_internal: failed to create '{folder_key}': {e}")
+                    else:
+                        folders_existed += 1
+                    # Also create ROMs subfolder
+                    roms_folder = console_folder / 'ROMs'
+                    if not roms_folder.exists():
+                        try:
+                            roms_folder.mkdir(parents=True, exist_ok=True)
+                        except Exception as e:
+                            logger.warning(f"api_index_build_internal: failed to create ROMs subfolder for '{folder_key}': {e}")
+                    console_folders_set.add(folder_key)
+    except Exception as e:
+        logger.warning(f"api_index_build_internal: could not load vimms_config.json: {e}")
+    
+    logger.info(f"api_index_build_internal: Folders: {folders_created} created, {folders_existed} already existed")
+    
+    # STEP 2: Scan for any additional physical folders not in config
+    logger.info("api_index_build_internal: STEP 2 - Scanning for additional physical folders...")
+    for child in root_path.iterdir():
+        if child.is_dir() and child.name in CONSOLE_MAP:
+            if child.name not in console_folders_set:
+                logger.info(f"api_index_build_internal: found additional physical folder '{child.name}'")
+            console_folders_set.add(child.name)
+    
+    console_folders = sorted(list(console_folders_set))
+    
+    if not console_folders:
+        return jsonify({'error': 'No console folders found in workspace root or config'}), 404
+    
+    # Initialize progress
+    INDEX_PROGRESS['in_progress'] = True
+    INDEX_PROGRESS['consoles_total'] = len(console_folders)
+    INDEX_PROGRESS['consoles_done'] = 0
+    INDEX_PROGRESS['sections_total'] = len(SECTIONS)
+    INDEX_PROGRESS['sections_done'] = 0
+    INDEX_PROGRESS['games_found'] = 0
+    INDEX_PROGRESS['partial_consoles'] = []
+    
+    logger.info(f"api_index_build_internal: found {len(console_folders)} console folders: {console_folders}")
+    
+    # Build index
+    index_data = {
+        'workspace_root': str(root_path),
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'consoles': [],
+        'complete': False  # Mark as incomplete until build finishes
+    }
+    
+    total_games = 0
+    for console_name in console_folders:
+        system = CONSOLE_MAP.get(console_name, console_name)
+        
+        # Update progress
+        INDEX_PROGRESS['current_console'] = console_name
+        INDEX_PROGRESS['sections_done'] = 0
+        
+        # Get console folder (already created in STEP 1)
+        console_folder = root_path / console_name
+        
+        # Prefer ROMs subfolder if it exists
+        roms_folder = console_folder / 'ROMs'
+        target_folder = roms_folder if roms_folder.exists() else console_folder
+        
+        logger.info(f"api_index_build_internal: STEP 3 - Scanning console '{console_name}' at '{target_folder}'")
+        
+        try:
+            # Create downloader with pre_scan to build local index
+            dl = VimmsDownloader(str(target_folder), system=system, detect_existing=True, pre_scan=True)
+            DL_INSTANCES[str(target_folder)] = dl
+            
+            # Manually trigger local index build since we're not calling download_games_from_sections
+            if dl.detect_existing and dl.pre_scan:
+                dl._build_local_index()
+                if dl.local_index is not None:
+                    count_files = sum(len(v) for v in dl.local_index.values())
+                    logger.info(f"api_index_build_internal: pre-scanned {count_files} files for '{console_name}'")
+            
+            # Scan all sections
+            sections_data = {}
+            for idx, section in enumerate(SECTIONS):
+                INDEX_PROGRESS['current_section'] = section
+                INDEX_PROGRESS['sections_done'] = idx
+                try:
+                    games = dl.get_game_list_from_section(section)
+                    
+                    # Annotate with local presence
+                    annotated_games = []
+                    debug_count = 0
+                    for game in games:
+                        present = False
+                        try:
+                            if dl.local_index is not None:
+                                matches = dl.find_all_matching_files(game['name'])
+                                present = bool(matches)
+                                # Debug log first few games in number section to see matching behavior
+                                if section == 'number' and debug_count < 5:
+                                    logger.info(f"api_index_build_internal: game='{game['name']}' present={present} matches={len(matches) if matches else 0}")
+                                    debug_count += 1
+                        except Exception as e:
+                            logger.exception(f"api_index_build_internal: error checking '{game['name']}': {e}")
+                            pass
+                        
+                        annotated_games.append({
+                            'id': game.get('game_id', ''),
+                            'name': game.get('name', ''),
+                            'url': game.get('page_url', ''),
+                            'present': present
+                        })
+                        total_games += 1
+                        INDEX_PROGRESS['games_found'] = total_games
+                    
+                    sections_data[section] = annotated_games
+                    logger.info(f"api_index_build_internal: section '{section}' for '{console_name}': {len(annotated_games)} games")
+                    
+                except Exception as e:
+                    logger.warning(f"api_index_build_internal: error scanning section '{section}' for '{console_name}': {e}")
+                    sections_data[section] = []
+            
+            console_entry = {
+                'name': console_name,
+                'system': system,
+                'folder': str(target_folder),
+                'sections': sections_data
+            }
+            index_data['consoles'].append(console_entry)
+            INDEX_PROGRESS['consoles_done'] += 1
+            INDEX_PROGRESS['partial_consoles'].append(console_entry)  # Add to partial list for progressive UI
+            logger.info(f"api_index_build_internal: completed '{console_name}' with {sum(len(s) for s in sections_data.values())} total games")
+            
+            # Save incrementally after each console to avoid data loss
+            try:
+                with open(INDEX_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(index_data, f, indent=2)
+            except Exception as e:
+                logger.exception(f"api_index_build_internal: error saving incremental progress: {e}")
+            
+        except Exception as e:
+            logger.exception(f"api_index_build_internal: error scanning console '{console_name}': {e}")
+    
+    # Mark as complete and save final version
+    index_data['complete'] = True
+    try:
+        with open(INDEX_FILE, 'w', encoding='utf-8') as f:
+            json.dump(index_data, f, indent=2)
+        logger.info(f"api_index_build_internal: saved complete index with {len(index_data['consoles'])} consoles, {total_games} total games")
+    except Exception as e:
+        logger.exception(f"api_index_build_internal: error saving index file: {e}")
+        return jsonify({'error': 'Failed to save index file'}), 500
+    
+    CACHED_INDEX = index_data
+    INDEX_PROGRESS['in_progress'] = False
+    INDEX_PROGRESS['current_console'] = 'Complete'
+    INDEX_PROGRESS['current_section'] = ''
+    INDEX_PROGRESS['partial_consoles'] = []  # Clear partial data
+    
+    return jsonify({
+        'status': 'ok',
+        'consoles_count': len(index_data['consoles']),
+        'total_games': total_games,
+        'timestamp': index_data['timestamp']
+    })
+
 
 def _find_missing_consoles(root_path: Path, index_data: dict) -> dict:
     """Return a dict describing consoles missing or partially indexed.
@@ -518,33 +1152,6 @@ def api_index_resync():
     t.start()
 
     return jsonify({'status': 'resync_started', 'consoles': consoles}), 202
-    # Get workspace root from existing cache
-    if not INDEX_FILE.exists():
-        return jsonify({'error': 'No existing index to refresh. Please build initial index first.'}), 404
-    
-    try:
-        with open(INDEX_FILE, 'r', encoding='utf-8') as f:
-            old_index = json.load(f)
-        workspace_root = old_index.get('workspace_root')
-        
-        if not workspace_root:
-            return jsonify({'error': 'No workspace_root in existing index'}), 400
-        
-        logger.info(f"api_index_refresh: refreshing index for '{workspace_root}'")
-        
-        # Call build with stored workspace root
-        return api_index_build_internal(workspace_root)
-        
-    except Exception as e:
-        logger.exception(f"api_index_refresh: error: {e}")
-        return jsonify({'error': 'Failed to refresh index'}), 500
-
-
-def api_index_build_internal(workspace_root):
-    """Internal helper to build index (shared by build and refresh endpoints)."""
-    # Just reuse the build logic
-    request.json = {'workspace_root': workspace_root}
-    return api_index_build()
 
 
 @app.route('/api/init', methods=['POST'])
@@ -560,25 +1167,76 @@ def api_init():
     if not folder:
         return jsonify({'error': 'folder required'}), 400
     p = Path(folder)
+    create_flag = bool(data.get('create', False))
+    create_consoles_flag = bool(data.get('create_consoles', False))
+
     if not p.exists():
-        return jsonify({'error': 'folder not found'}), 404
+        if create_flag:
+            try:
+                p.mkdir(parents=True, exist_ok=True)
+                logger.info(f"api_init: created missing folder '{p}' as requested")
+            except Exception as e:
+                logger.exception(f"api_init: failed to create folder '{p}': {e}")
+                return jsonify({'error': 'Failed to create folder'}), 500
+        else:
+            return jsonify({'error': 'folder not found'}), 404
+
 
     # If folder appears to be a workspace root (contains possible console folders), return candidates
     consoles = []
     try:
+        # Known console names for detection (fallback if import fails)
+        known_consoles = ['DS', 'NDS', 'NES', 'SNES', 'N64', 'GC', 'GAMECUBE', 'WII', 'WIIWARE', 
+                         'GB', 'GAMEBOY', 'GBC', 'GBA', 'PS1', 'PSX', 'PLAYSTATION', 'PS2', 'PS3', 
+                         'PSP', 'GENESIS', 'MEGADRIVE', 'SMS', 'MASTERSYSTEM', 'SATURN', 'DREAMCAST', 
+                         'DC', 'XBOX', 'ATARI2600', 'ATARI7800']
+        
+        console_map = {}
+        try:
+            # Try importing from parent directory (workspace root)
+            import sys
+            parent_dir = Path(__file__).parent.parent
+            sys.path.insert(0, str(parent_dir))
+            from download_vimms import CONSOLE_MAP
+            console_map = CONSOLE_MAP
+            sys.path.remove(str(parent_dir))
+        except Exception:
+            # Fallback to known console names
+            console_map = {name: name for name in known_consoles}
+            logger.warning("api_init: could not import CONSOLE_MAP, using fallback console detection")
+        
         for child in p.iterdir():
             if child.is_dir():
-                name = child.name
-                # Simple match against known consoles (case-insensitive)
-                from src.download_vimms import CONSOLE_MAP
-                if any(k.lower() in name.lower() for k in CONSOLE_MAP.keys()):
-                    consoles.append(name)
+                name = child.name.upper()  # Normalize to uppercase for comparison
+                # Check against known console names (case-insensitive)
+                if any(k.upper() == name or k.upper() in name for k in console_map.keys()):
+                    consoles.append(child.name)  # Keep original case for display
+                    
         logger.info(f"api_init: scanned folder '{p}' and found consoles: {consoles}")
     except Exception:
         logger.exception(f"api_init: error scanning folder '{p}' for consoles")
         consoles = []
 
     if consoles:
+        # Optionally create any configured console folders if requested
+        if create_consoles_flag:
+            try:
+                cfg = None
+                cfg_path = Path(__file__).resolve().parent.parent / 'vimms_config.json'
+                if cfg_path.exists():
+                    with open(cfg_path, 'r', encoding='utf-8') as cf:
+                        cfg = json.load(cf)
+                if cfg and isinstance(cfg.get('folders'), dict):
+                    for key, v in cfg.get('folders', {}).items():
+                        # Only create if active (or if user asked to create all via flag)
+                        if v.get('active', True):
+                            new_dir = p / key
+                            if not new_dir.exists():
+                                new_dir.mkdir(parents=True, exist_ok=True)
+                                logger.info(f"api_init: created configured console folder '{new_dir}'")
+            except Exception:
+                logger.exception('api_init: failed while creating configured console folders')
+
         logger.info(f"api_init: returning workspace root with {len(consoles)} consoles for '{p}'")
         return jsonify({'status': 'root', 'root': str(p), 'consoles': consoles})
 
@@ -605,6 +1263,120 @@ def api_init():
 @app.route('/api/sections', methods=['GET'])
 def api_sections():
     return jsonify({'sections': SECTIONS})
+
+
+@app.route('/api/config', methods=['GET'])
+def api_config_get():
+    """Return the top-level `vimms_config.json` if present."""
+    cfg_path = Path(__file__).resolve().parent.parent / 'vimms_config.json'
+    if not cfg_path.exists():
+        return jsonify({'error': 'config not found'}), 404
+    try:
+        with open(cfg_path, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+        return jsonify(cfg)
+    except Exception as e:
+        logger.exception(f"api_config_get: failed to read config: {e}")
+        return jsonify({'error': 'failed to read config'}), 500
+
+
+@app.route('/api/config/default_folders', methods=['GET'])
+def api_config_default_folders():
+    """Return a list of known console folder names derived from the downloader's CONSOLE_MAP.
+    This helps the UI populate a sensible default `folders` mapping when none exists.
+    """
+    try:
+        # Import CONSOLE_MAP from downloader (workspace root)
+        import sys
+        parent_dir = Path(__file__).parent.parent
+        sys.path.insert(0, str(parent_dir))
+        from download_vimms import CONSOLE_MAP
+        sys.path.remove(str(parent_dir))
+        # Use a deterministic ordering
+        keys = sorted(CONSOLE_MAP.keys())
+        # Build minimal default mapping
+        defaults = {k: {'active': True, 'priority': idx + 1} for idx, k in enumerate(keys)}
+        return jsonify({'defaults': defaults})
+    except Exception as e:
+        logger.exception(f"api_config_default_folders: failed to build defaults: {e}")
+        return jsonify({'error': 'failed to build default folders'}), 500
+
+
+@app.route('/api/config/save', methods=['POST'])
+def api_config_save():
+    """Replace or update `vimms_config.json`. Expects full config payload (saves backup)."""
+    try:
+        data = request.get_json()
+        if data is None:
+            return jsonify({'error': 'invalid or missing JSON data'}), 400
+    except Exception as e:
+        return jsonify({'error': 'malformed JSON'}), 400
+        
+    cfg_path = Path(__file__).resolve().parent.parent / 'vimms_config.json'
+    # Prevent accidental overwrite of config with empty folders unless explicitly forced
+    force_flag = bool(data.get('_force_save', False))
+    if (not isinstance(data.get('folders'), dict) or len(data.get('folders') or {}) == 0) and not force_flag:
+        return jsonify({'error': 'folders missing or empty; use _force_save to override'}), 400
+
+    try:
+        # Backup existing
+        if cfg_path.exists():
+            bak = cfg_path.with_suffix('.json.bak')
+            cfg_path.replace(bak)
+            # write original back after backup rename
+            bak.rename(cfg_path)
+        
+        # Sort folders by priority before saving
+        if 'folders' in data and isinstance(data['folders'], dict):
+            data['folders'] = dict(sorted(
+                data['folders'].items(),
+                key=lambda x: x[1].get('priority', 999)
+            ))
+        
+        # Save new
+        with open(cfg_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        logger.info('api_config_save: saved vimms_config.json')
+        return jsonify({'status': 'saved'})
+    except Exception as e:
+        logger.exception(f"api_config_save: failed to save config: {e}")
+        return jsonify({'error': 'failed to save config'}), 500
+
+
+@app.route('/api/config/create_folders', methods=['POST'])
+def api_config_create_folders():
+    """Create console folders under a workspace root based on vimms_config.json.
+
+    Payload: { "workspace_root": "H:/Games", "active_only": true }
+    Returns list of folders created.
+    """
+    data = request.json or {}
+    root = data.get('workspace_root')
+    active_only = bool(data.get('active_only', True))
+    if not root:
+        return jsonify({'error': 'workspace_root required'}), 400
+    cfg_path = Path(__file__).resolve().parent.parent / 'vimms_config.json'
+    if not cfg_path.exists():
+        return jsonify({'error': 'config not found'}), 404
+    created = []
+    try:
+        with open(cfg_path, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+        for key, v in (cfg.get('folders') or {}).items():
+            # Handle case where v might be a string instead of a dict
+            if isinstance(v, str):
+                continue
+            if active_only and not v.get('active', True):
+                continue
+            new_dir = Path(root) / key
+            if not new_dir.exists():
+                new_dir.mkdir(parents=True, exist_ok=True)
+                created.append(str(new_dir))
+                logger.info(f"api_config_create_folders: created {new_dir}")
+        return jsonify({'created': created})
+    except Exception as e:
+        logger.exception(f"api_config_create_folders: failed: {e}")
+        return jsonify({'error': 'failed to create folders'}), 500
 
 
 @app.route('/api/section/<section>', methods=['GET'])
@@ -888,13 +1660,84 @@ def init_worker():
     _load_processed_from_disk()
     
     # Load cached index if exists
+    index_incomplete = False
     if INDEX_FILE.exists():
         try:
             with open(INDEX_FILE, 'r', encoding='utf-8') as f:
                 CACHED_INDEX = json.load(f)
             logger.info(f"init_worker: loaded cached index with {len(CACHED_INDEX.get('consoles', []))} consoles")
+            
+            # Check if index is incomplete (build was interrupted)
+            if CACHED_INDEX.get('complete') == False:
+                index_incomplete = True
+                workspace_root = CACHED_INDEX.get('workspace_root')
+                if workspace_root:
+                    logger.info(f"init_worker: index incomplete, auto-starting rebuild for '{workspace_root}'")
+                    # Start rebuild in background thread
+                    def auto_rebuild():
+                        with app.app_context():
+                            try:
+                                api_index_build_internal(workspace_root)
+                            except Exception as e:
+                                logger.exception(f"init_worker: auto-rebuild failed: {e}")
+                    t_rebuild = Thread(target=auto_rebuild, daemon=True)
+                    t_rebuild.start()
         except Exception as e:
             logger.warning(f"init_worker: failed to load cached index: {e}")
+    else:
+        # No index file exists - try to infer workspace root and auto-build
+        logger.info("init_worker: no index file found")
+        workspace_root = None
+        
+        # Try to infer from queue items (which have full folder paths)
+        if not task_q.empty():
+            try:
+                # Peek at first queue item to get a folder path
+                queue_list = list(task_q.queue)
+                if queue_list:
+                    first_item = queue_list[0]
+                    folder_path = first_item.get('folder', '')
+                    if folder_path:
+                        # folder_path is like "H:\Games\DS\ROMs" or "H:\Games\DS"
+                        # We want the parent of the console folder (H:\Games)
+                        console_path = Path(folder_path)
+                        # If it ends with ROMs, go up two levels, otherwise one
+                        if console_path.name == 'ROMs':
+                            workspace_root = str(console_path.parent.parent)
+                        else:
+                            workspace_root = str(console_path.parent)
+                        logger.info(f"init_worker: inferred workspace root '{workspace_root}' from queue")
+            except Exception as e:
+                logger.warning(f"init_worker: failed to infer workspace from queue: {e}")
+        
+        # Fall back to config file
+        if not workspace_root:
+            config_file = Path(__file__).parent.parent / 'vimms_config.json'
+            if config_file.exists():
+                try:
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                    
+                    # Look for an explicit workspace_root field in config
+                    workspace_root = config.get('workspace_root')
+                    if workspace_root:
+                        logger.info(f"init_worker: got workspace root '{workspace_root}' from config")
+                except Exception as e:
+                    logger.warning(f"init_worker: failed to read config: {e}")
+        
+        # Start auto-build if we have a workspace root
+        if workspace_root and Path(workspace_root).exists():
+            logger.info(f"init_worker: auto-starting build for '{workspace_root}'")
+            def auto_build():
+                with app.app_context():
+                    try:
+                        api_index_build_internal(workspace_root)
+                    except Exception as e:
+                        logger.exception(f"init_worker: auto-build failed: {e}")
+            t_build = Thread(target=auto_build, daemon=True)
+            t_build.start()
+        else:
+            logger.info("init_worker: could not infer workspace root for auto-build")
     
     logger.info(f"init_worker: loaded queue with {task_q.qsize()} items and {len(PROCESSED)} processed records")
     # ensure worker directory exists

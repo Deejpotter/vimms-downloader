@@ -41,6 +41,50 @@ export async function refreshIndex() {
 }
 
 /**
+ * Build index fast using cached remote catalog
+ */
+export async function buildIndexFast(workspaceRoot) {
+  const res = await fetch(`${API_BASE}/index/build_fast`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workspace_root: workspaceRoot })
+  });
+  if (!res.ok) throw new Error(`Failed to build index fast: ${res.statusText}`);
+  return res.json();
+}
+
+/**
+ * Build remote catalog (one-time, takes 15-30 min)
+ */
+export async function buildRemoteCatalog(workspaceRoot) {
+  const res = await fetch(`${API_BASE}/catalog/remote/build`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workspace_root: workspaceRoot })
+  });
+  if (!res.ok) throw new Error(`Failed to build remote catalog: ${res.statusText}`);
+  return res.json();
+}
+
+/**
+ * Get remote catalog build progress
+ */
+export async function getRemoteCatalogProgress() {
+  const res = await fetch(`${API_BASE}/catalog/remote/progress`);
+  if (!res.ok) throw new Error(`Failed to get remote catalog progress: ${res.statusText}`);
+  return res.json();
+}
+
+/**
+ * Get cached remote catalog
+ */
+export async function getRemoteCatalog() {
+  const res = await fetch(`${API_BASE}/catalog/remote/get`);
+  if (!res.ok) throw new Error(`Failed to get remote catalog: ${res.statusText}`);
+  return res.json();
+}
+
+/**
  * Get games for a section
  */
 export async function getSectionGames(consoleKey, section) {

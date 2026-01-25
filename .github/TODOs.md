@@ -2,6 +2,14 @@
 
 This file tracks the work planned and completed for this repository. Keep the most recent 10 completed items.
 
+- [ ] (In Progress) **Split index building into separate remote catalog fetch and local file scan** — 2026-01-26
+  - Phase 1: Create remote catalog cache endpoint (fetch once from Vimm's Lair) — ✅ DONE (tested)
+  - Phase 2: Fast local scan endpoint (uses cached catalog + scans local files) — ✅ DONE (ready to test)
+  - Phase 3: Update frontend to use separate operations — ✅ DONE (Settings menu + progress UI)
+  - Phase 4: Add "Refresh Remote Catalog" button for manual updates — ✅ DONE (deployed)
+  - **BUGFIX**: Fixed CONSOLE_MAP to use correct Vimm system codes (GG not GameGear, 32X not Sega32X, etc.)
+  - **Current**: Restarting catalog build with corrected system codes
+
 - [x] (Completed) Add `.github/copilot-instructions.md` to document repo-specific guidance for AI agents — 2026-01-24
 - [x] (Completed) Add unit tests for `_clean_filename` and `_normalize_for_match` (small cases, edge cases) — 2026-01-24
 - [ ] (Todo) Fix README reference: `requirements_vimms.txt` vs `requirements.txt` (update docs or add the file)
@@ -12,13 +20,21 @@ This file tracks the work planned and completed for this repository. Keep the mo
 - [x] (Completed) Improve missing/partial detection (case-insensitive + partial thresholds) and selective resync — 2026-01-25
 - [x] (Completed) Add game detail endpoint (size/format) and fetch details on game listing — 2026-01-25
 - [x] (Completed) Display download indicator (local files) and popularity/stars on game rows — 2026-01-25
-- [ ] (In Progress) Add unit tests for resync and missing detection logic (expand coverage; add resync worker tests) — 2026-01-25
-- [ ] (Todo) Add Admin UI to view/edit `vimms_config.json` (realtime edit, save, backup) — 2026-01-25
-- [ ] (Todo) Add drag-and-drop reordering of consoles in Admin UI to set `priority` and save to config — 2026-01-25
-- [x] (Completed) Add backend config endpoints: GET `/api/config`, POST `/api/config/save`, POST `/api/config/create_folders` — 2026-01-25
-- [x] (Completed) Add create-on-init and create-configured-console-folder behavior in `/api/init` — 2026-01-25
-- [ ] (Todo) Add unit tests for config endpoints and folder creation — 2026-01-25
-- [ ] (Todo) Add UI for 'Create configured folders' with preview and confirm — 2026-01-25
+- [x] (Completed) Add unit tests for resync and missing detection logic — 2026-01-25
+- [x] (Completed) Fix admin UI priority display logic (position-based priority) — 2026-01-25
+- [x] (Completed) Make active checkbox more prominent in Admin UI — 2026-01-25
+- [x] (Completed) Add auto-save for admin config changes — 2026-01-25
+- [x] (Completed) Add drag-and-drop reordering for console folders in Admin UI — 2026-01-25
+- [x] (Completed) Fix admin UI readability/styles with better dark mode support — 2026-01-25
+- [x] (Completed) Remove manual "Initialize Index" and "Refresh Index" buttons - auto-initialize when workspace is set — 2026-01-25
+- [x] (Completed) Auto-create configured folders in background when workspace root + config are present — 2026-01-25
+- [x] (Completed) Move incomplete index warning to header with visual status indicator — 2026-01-25
+- [x] (Completed) Remove manual "Create Configured Folders" button from AdminPanel — 2026-01-25
+- [x] (Completed) Add auto-save to AdminPanel (remove Edit/Save buttons) — 2026-01-25
+- [x] (Completed) Fix AdminPanel dark mode text readability — 2026-01-25
+- [x] (Completed) Hide workspace setup UI when consoles exist — 2026-01-25
+- [x] (Completed) Add "Reinitialize Workspace" option to Settings menu — 2026-01-25
+- [x] (Completed) Fix priority updates when dragging to reorder (position → priority value) — 2026-01-25
 
 - NOTE: Per owner preference, do NOT add CI workflows. Keep tests local and lightweight; run with `pytest` locally. If you want CI later, open a new TODO.
 

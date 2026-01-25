@@ -47,7 +47,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
 from downloader_lib.fetch import fetch_section_page, fetch_game_page
-from downloader_lib.parse import parse_games_from_section, resolve_download_form
+from downloader_lib.parse import parse_games_from_section, resolve_download_form, parse_game_details
 
 # Disable SSL warnings
 urllib3.disable_warnings()
@@ -62,8 +62,11 @@ CONSOLE_MAP = {
     'DS': 'DS',
     'NDS': 'DS',
     'NES': 'NES',
+    'NINTENDO': 'NES',
     'SNES': 'SNES',
+    'SUPERNINTENDO': 'SNES',
     'N64': 'N64',
+    'NINTENDO64': 'N64',
     'GC': 'GameCube',
     'GAMECUBE': 'GameCube',
     'WII': 'Wii',
@@ -71,24 +74,59 @@ CONSOLE_MAP = {
     'GB': 'GB',
     'GAMEBOY': 'GB',
     'GBC': 'GBC',
+    'GAMEBOYCOLOR': 'GBC',
     'GBA': 'GBA',
+    'GAMEBOYADVANCE': 'GBA',
+    'GAMEBOYAD': 'GBA',
+    '3DS': '3DS',
+    'NINTENDO3DS': '3DS',
     'PS1': 'PS1',
     'PSX': 'PS1',
     'PLAYSTATION': 'PS1',
     'PS2': 'PS2',
+    'PLAYSTATION2': 'PS2',
     'PS3': 'PS3',
+    'PLAYSTATION3': 'PS3',
     'PSP': 'PSP',
+    'PSPPORTABLE': 'PSP',
     'GENESIS': 'Genesis',
     'MEGADRIVE': 'Genesis',
     'SMS': 'SMS',
     'MASTERSYSTEM': 'SMS',
+    'SEGACD': 'SegaCD',
+    'SCD': 'SegaCD',
+    'SEGA32X': '32X',  # Fixed: Vimm uses '32X' not 'Sega32X'
+    '32X': '32X',
     'SATURN': 'Saturn',
+    'SEGASATURN': 'Saturn',
     'DREAMCAST': 'Dreamcast',
     'DC': 'Dreamcast',
+    'GAMEGEAR': 'GG',  # Fixed: Vimm uses 'GG' not 'GameGear'
+    'GG': 'GG',
     'XBOX': 'Xbox',
+    'XBOX360': 'Xbox360',
+    'XBOX360DIGITAL': 'X360-D',  # Fixed: Vimm uses 'X360-D' for digital
     'ATARI2600': 'Atari2600',
+    'ATARI5200': 'Atari5200',
     'ATARI7800': 'Atari7800',
+    'TURBOGRAFX16': 'TG16',  # Fixed: Vimm uses 'TG16' not 'TurboGrafx16'
+    'TURBOGRAFX-16': 'TG16',
+    'TG16': 'TG16',
+    'TURBOGRAFXCD': 'TGCD',  # Fixed: Vimm uses 'TGCD' not 'TurboGrafxCD'
+    'TGCD': 'TGCD',
+    'CDI': 'CDi',  # Fixed: Vimm uses 'CDi' (capital D, lowercase i)
+    'CD-I': 'CDi',
+    'JAGUAR': 'Jaguar',  # Adding missing systems from Vimm
+    'JAGUARCD': 'JaguarCD',
+    'VB': 'VB',  # Virtual Boy
+    'VIRTUALBOY': 'VB',
+    'LYNX': 'Lynx',  # Atari Lynx
 }
+
+SECTIONS = [
+    'number', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'
+]
 
 # Default archive extension when Content-Disposition filename is missing.
 # Many disc-based systems on Vimm use .7z archives.
@@ -390,6 +428,12 @@ class VimmsDownloader:
                 page_num += 1
                 self._random_delay(self.delay_between_page_requests)
                 
+            except requests.exceptions.HTTPError as e:
+                # 404 on page 2+ is expected when section has only 1 page
+                if page_num > 1 and '404' in str(e):
+                    break
+                print(f"  ✗ Error fetching section '{section}' page {page_num}: {e}")
+                break
             except Exception as e:
                 print(f"  ✗ Error fetching section '{section}' page {page_num}: {e}")
                 break
