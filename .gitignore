@@ -65,3 +65,18 @@ logs/
 
 # Local data or downloads
 ROMs/
+
+# Runtime cache and state files
+src/webui_index.json
+src/webui_queue.json
+src/webui_processed.json
+src/webui_remote_catalog.json
+src/temp_catalog/
+
+# User-specific configuration
+vimms_config.json
+
+# Backup and temporary files
+*_clean.jsx
+*_backup.*
+*.bak
