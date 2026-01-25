@@ -15,8 +15,8 @@ export default function SettingsMenu() {
           <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-200" onClick={() => window.dispatchEvent(new CustomEvent('open-resync'))}>
             Resync Index
           </button>
-          <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-200" onClick={() => alert('Settings coming soon') }>
-            Preferences
+          <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-200" onClick={() => window.dispatchEvent(new CustomEvent('open-admin')) }>
+            Admin
           </button>
         </div>
       )}

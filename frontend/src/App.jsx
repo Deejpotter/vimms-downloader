@@ -7,6 +7,7 @@ import { QueuePanel } from './components/QueuePanel';
 import { ProcessedList } from './components/ProcessedList';
 import SettingsMenu from './components/SettingsMenu';
 import ResyncModal from './components/ResyncModal';
+import AdminPanel from './components/AdminPanel';
 import { useIndexBuilder } from './hooks/useIndexBuilder';
 import { getProcessed, getIndex } from './services/api';
 
@@ -17,6 +18,14 @@ function App() {
   const [processedIds, setProcessedIds] = useState([]);
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [hasWorkspace, setHasWorkspace] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+
+  // Open admin panel when requested by SettingsMenu
+  useEffect(() => {
+    const handler = () => setAdminOpen(true);
+    window.addEventListener('open-admin', handler);
+    return () => window.removeEventListener('open-admin', handler);
+  }, []);
 
   // Load workspace from localStorage on mount
   useEffect(() => {
@@ -145,6 +154,9 @@ function App() {
 
       {/* Floating queue panel - only show when consoles are loaded */}
       {consoles.length > 0 && <QueuePanel />}
+
+      {/* Admin panel modal */}
+      <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
     </div>
   );
 }
