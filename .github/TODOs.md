@@ -31,7 +31,7 @@ This file tracks the work planned and completed for this repository. Keep the mo
   - **Step 6: Improved interface text and verified all systems**
     - [x] 6.1: Enhanced button tooltips and alert messages
     - [x] 6.2: Fixed syntax errors in webapp.py
-    - [x] 6.3: Verified webapp runs (http://127.0.0.1:8000)
+    - [x] 6.3: Verified webapp runs (<http://127.0.0.1:8000>)
     - [x] 6.4: Verified CLI tools work (download_vimms.py, run_vimms.py)
     - [x] 6.5: All tests pass: 36 passed, 2 skipped, 0 failed
 
@@ -92,7 +92,7 @@ This file tracks the work planned and completed for this repository. Keep the mo
     - [x] 5.4: Added descriptive labels and emojis to QueuePanel
   - **Step 6: Testing and verification**
     - [x] 6.1: Fixed syntax errors in webapp.py (escaped quotes in docstrings)
-    - [x] 6.2: Verified webapp starts successfully on http://127.0.0.1:8000
+    - [x] 6.2: Verified webapp starts successfully on <http://127.0.0.1:8000>
     - [x] 6.3: Verified CLI tools work (download_vimms.py, run_vimms.py)
     - [x] 6.4: Ran full test suite: 36 passed, 2 skipped
 
@@ -109,7 +109,7 @@ This file tracks the work planned and completed for this repository. Keep the mo
   - Fixed `cli/run_vimms.py` ROOT variable to point to repository root (parent.parent)
   - Updated config resolution in run_vimms.py to prioritize --src argument (lines 163-192)
   - Created `tests/conftest.py` for automatic import path configuration
-  - Marked 2 outdated tests as skipped (_prune_local_index, _find_section_start_index removed)
+  - Marked 2 outdated tests as skipped (_prune_local_index,_find_section_start_index removed)
   - **Verification**: 36 tests passing, 2 skipped; webapp starts successfully; CLI tools work correctly
 
 - [x] (Completed) **Reorganized CLI scripts into dedicated `cli/` folder** — 2026-01-26
