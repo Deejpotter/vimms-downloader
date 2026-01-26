@@ -1066,6 +1066,8 @@ class VimmsDownloader:
         start_time = datetime.now()
         total_games_processed = 0
         total_games_downloaded = 0
+        # Estimate of total games across all sections (used for overall progress display)
+        total_games_estimate = 0
 
         # If pre-scan is enabled, build the in-memory index once to speed up detection
         if self.detect_existing and self.pre_scan:
