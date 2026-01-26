@@ -10,8 +10,15 @@ import logging
 from logging.handlers import RotatingFileHandler
 import json
 
-# Add parent directory to path to allow imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add repository root to path for shared libraries (downloader_lib, utils)
+# and cli directory for CLI tool imports
+repo_root = Path(__file__).parent.parent
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+cli_dir = repo_root / 'cli'
+if str(cli_dir) not in sys.path:
+    sys.path.insert(0, str(cli_dir))
 
 from download_vimms import VimmsDownloader, CONSOLE_MAP, SECTIONS
 from downloader_lib.parse import parse_game_details
@@ -1724,12 +1731,48 @@ def api_game(game_id):
 
 @app.route('/api/queue', methods=['POST'])
 def api_queue_post():
-    # item should contain folder and game dict or game_id and optionally page_url/name
+    """Add item to download queue.
+    
+    Supports 4 queue types:
+    - type='game': { type: 'game', folder, game: {...} }
+    - type='section': { type: 'section', folder, section, console_name }
+    - type='console': { type: 'console', folder, console_name }
+    - type='all': { type: 'all', workspace_root }
+    
+    For backward compatibility, items without 'type' default to 'game'.
+    """
     item = request.json or {}
+    
+    # Validate based on type
+    item_type = item.get('type', 'game')
+    
+    if item_type == 'all':
+        if not item.get('workspace_root'):
+            return jsonify({'error': 'workspace_root required for type=all'}), 400
+    elif item_type == 'console':
+        if not item.get('folder'):
+            return jsonify({'error': 'folder required for type=console'}), 400
+    elif item_type == 'section':
+        if not item.get('folder') or not item.get('section'):
+            return jsonify({'error': 'folder and section required for type=section'}), 400
+    elif item_type == 'game':
+        if not item.get('folder') or not item.get('game'):
+            return jsonify({'error': 'folder and game required for type=game'}), 400
+    
     task_q.put(item)
     _save_queue_to_disk()
-    logger.info(f"api_queue: queued item for folder={item.get('folder')} item={item.get('game') or item.get('game_id')}" )
-    return jsonify({'status': 'queued'})
+    
+    # Log with appropriate detail based on type
+    if item_type == 'all':
+        logger.info(f"api_queue: queued ALL consoles from workspace={item.get('workspace_root')}")
+    elif item_type == 'console':
+        logger.info(f"api_queue: queued CONSOLE {item.get('console_name')} folder={item.get('folder')}")
+    elif item_type == 'section':
+        logger.info(f"api_queue: queued SECTION {item.get('console_name')}/{item.get('section')} folder={item.get('folder')}")
+    else:
+        logger.info(f"api_queue: queued GAME for folder={item.get('folder')} item={item.get('game', {}).get('name', 'unknown')}")
+    
+    return jsonify({'status': 'queued', 'type': item_type})
 
 
 @app.route('/api/queue', methods=['GET'])
@@ -1770,7 +1813,27 @@ def api_queue_delete():
 
 
 def worker_loop():
+    """Background worker that processes queued download tasks.
+    
+    Supports 4 queue types:
+    - type='game': Download single game (uses VimmsDownloader directly)
+    - type='section': Download all games in a section (calls CLI script)
+    - type='console': Download all sections for a console (calls CLI script)
+    - type='all': Download all active consoles (calls CLI script)
+    
+    For bulk operations (console/section/all), this calls the CLI scripts
+    as subprocesses to ensure identical behavior and leverage existing
+    progress tracking, rate limiting, and resume capability.
+    """
     global worker_running
+    import subprocess
+    import sys
+    
+    # Resolve paths to CLI scripts
+    repo_root = Path(__file__).parent.parent
+    run_vimms_script = repo_root / 'cli' / 'run_vimms.py'
+    download_vimms_script = repo_root / 'cli' / 'download_vimms.py'
+    
     worker_running = True
     logger.info('worker_loop: started')
     while True:
@@ -1780,41 +1843,140 @@ def worker_loop():
             if item is None:
                 logger.info('worker_loop: received shutdown sentinel')
                 break
+            
+            # Determine queue item type (default to 'game' for backward compatibility)
+            item_type = item.get('type', 'game')
             folder = item.get('folder')
-            game = item.get('game')
-            # Find or create downloader for folder
-            dl = DL_INSTANCES.get(folder)
-            if not dl:
-                logger.info(f"worker_loop: creating downloader for folder: {folder}")
-                # Try to infer system from cached index
-                detected_system = 'UNKNOWN'
-                if CACHED_INDEX and 'consoles' in CACHED_INDEX:
-                    for console in CACHED_INDEX['consoles']:
-                        if console['folder'] == folder:
-                            detected_system = console['system']
-                            logger.info(f"worker_loop: detected system '{detected_system}' from cached index for folder '{folder}'")
-                            break
-                dl = VimmsDownloader(folder, system=detected_system, detect_existing=True, pre_scan=True)
-                DL_INSTANCES[folder] = dl
-            # If game has game_id and page_url, directly call download_game
             success = False
+            output_lines = []
+            
             try:
-                if game:
-                    logger.info(f"worker_loop: starting download_game for {game.get('name')} (id={game.get('game_id')})")
-                    success = dl.download_game(game)
-                else:
-                    # Accept minimal {game_id, page_url, name}
-                    gid = item.get('game_id')
-                    page = item.get('page_url')
-                    if gid and page:
-                        g = {'game_id': gid, 'page_url': page, 'name': item.get('name', '')}
-                        logger.info(f"worker_loop: starting download_game for {g.get('name')} (id={gid}) via page {page}")
-                        success = dl.download_game(g)
+                # Type 1: Queue All - Run run_vimms.py to process all active consoles
+                if item_type == 'all':
+                    workspace_root = item.get('workspace_root')
+                    logger.info(f"worker_loop: queuing ALL consoles from workspace: {workspace_root}")
+                    
+                    # Build command: python cli/run_vimms.py --src <workspace_root>
+                    cmd = [sys.executable, str(run_vimms_script)]
+                    if workspace_root:
+                        cmd.extend(['--src', workspace_root])
+                    
+                    logger.info(f"worker_loop: running command: {' '.join(cmd)}")
+                    
+                    # Run subprocess and capture output
+                    process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                        universal_newlines=True
+                    )
+                    
+                    # Stream output line by line
+                    for line in process.stdout:
+                        output_lines.append(line.rstrip())
+                        logger.info(f"[CLI] {line.rstrip()}")
+                    
+                    process.wait()
+                    success = process.returncode == 0
+                    logger.info(f"worker_loop: run_vimms.py completed with returncode={process.returncode}")
+                
+                # Type 2: Queue Console - Run download_vimms.py for all sections
+                elif item_type == 'console':
+                    console_name = item.get('console_name', 'Unknown')
+                    logger.info(f"worker_loop: queuing CONSOLE: {console_name} folder={folder}")
+                    
+                    # Build command: python cli/download_vimms.py --folder <path>
+                    cmd = [sys.executable, str(download_vimms_script), '--folder', folder]
+                    
+                    logger.info(f"worker_loop: running command: {' '.join(cmd)}")
+                    
+                    process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                        universal_newlines=True
+                    )
+                    
+                    for line in process.stdout:
+                        output_lines.append(line.rstrip())
+                        logger.info(f"[CLI] {line.rstrip()}")
+                    
+                    process.wait()
+                    success = process.returncode == 0
+                    logger.info(f"worker_loop: download_vimms.py completed with returncode={process.returncode}")
+                
+                # Type 3: Queue Section - Run download_vimms.py for one section
+                elif item_type == 'section':
+                    section = item.get('section', '')
+                    console_name = item.get('console_name', 'Unknown')
+                    logger.info(f"worker_loop: queuing SECTION: {console_name}/{section} folder={folder}")
+                    
+                    # Build command: python cli/download_vimms.py --folder <path> --section-priority <letter>
+                    cmd = [sys.executable, str(download_vimms_script), '--folder', folder, '--section-priority', section]
+                    
+                    logger.info(f"worker_loop: running command: {' '.join(cmd)}")
+                    
+                    process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                        universal_newlines=True
+                    )
+                    
+                    for line in process.stdout:
+                        output_lines.append(line.rstrip())
+                        logger.info(f"[CLI] {line.rstrip()}")
+                    
+                    process.wait()
+                    success = process.returncode == 0
+                    logger.info(f"worker_loop: download_vimms.py completed with returncode={process.returncode}")
+                
+                # Type 4: Queue Game - Download single game (existing behavior)
+                elif item_type == 'game':
+                    game = item.get('game')
+                    logger.info(f"worker_loop: queuing GAME: {game.get('name') if game else 'Unknown'} folder={folder}")
+                    
+                    # Find or create downloader for folder
+                    dl = DL_INSTANCES.get(folder)
+                    if not dl:
+                        logger.info(f"worker_loop: creating downloader for folder: {folder}")
+                        # Try to infer system from cached index
+                        detected_system = 'UNKNOWN'
+                        if CACHED_INDEX and 'consoles' in CACHED_INDEX:
+                            for console in CACHED_INDEX['consoles']:
+                                if console['folder'] == folder:
+                                    detected_system = console['system']
+                                    logger.info(f"worker_loop: detected system '{detected_system}' from cached index for folder '{folder}'")
+                                    break
+                        dl = VimmsDownloader(folder, system=detected_system, detect_existing=True, pre_scan=True)
+                        DL_INSTANCES[folder] = dl
+                    
+                    # Download the game
+                    if game:
+                        logger.info(f"worker_loop: starting download_game for {game.get('name')} (id={game.get('game_id')})")
+                        success = dl.download_game(game)
+                    else:
+                        # Accept minimal {game_id, page_url, name}
+                        gid = item.get('game_id')
+                        page = item.get('page_url')
+                        if gid and page:
+                            g = {'game_id': gid, 'page_url': page, 'name': item.get('name', '')}
+                            logger.info(f"worker_loop: starting download_game for {g.get('name')} (id={gid}) via page {page}")
+                            success = dl.download_game(g)
+                
                 # Record processed outcome
                 record = {
                     'folder': folder,
                     'item': item,
+                    'type': item_type,
                     'success': bool(success),
+                    'output': output_lines if output_lines else None,
                     'timestamp': datetime.utcnow().isoformat() + 'Z'
                 }
                 PROCESSED.insert(0, record)
@@ -1823,9 +1985,25 @@ def worker_loop():
                     PROCESSED.pop()
                 _save_processed_to_disk()
                 task_q.task_done()
-                logger.info(f"worker_loop: completed item: success={bool(success)} for folder={folder}")
+                logger.info(f"worker_loop: completed item: type={item_type} success={bool(success)} for folder={folder}")
+                
             except Exception as e:
                 logger.exception('Error in worker loop while processing item')
+                # Record the failure
+                record = {
+                    'folder': folder,
+                    'item': item,
+                    'type': item_type,
+                    'success': False,
+                    'error': str(e),
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+                PROCESSED.insert(0, record)
+                if len(PROCESSED) > 200:
+                    PROCESSED.pop()
+                _save_processed_to_disk()
+                task_q.task_done()
+                
         except Exception as e:
             logger.exception(f'Worker loop unexpected error: {e}')
     worker_running = False

@@ -123,6 +123,39 @@ export async function addToQueue(gameData) {
 }
 
 /**
+ * Queue entire console for download (all sections)
+ */
+export async function queueConsole(folder, consoleName) {
+  return addToQueue({
+    type: 'console',
+    folder,
+    console_name: consoleName
+  });
+}
+
+/**
+ * Queue a single section for download
+ */
+export async function queueSection(folder, section, consoleName) {
+  return addToQueue({
+    type: 'section',
+    folder,
+    section,
+    console_name: consoleName
+  });
+}
+
+/**
+ * Queue all active consoles for download (runs run_vimms.py)
+ */
+export async function queueAll(workspaceRoot) {
+  return addToQueue({
+    type: 'all',
+    workspace_root: workspaceRoot
+  });
+}
+
+/**
  * Get current download queue
  */
 export async function getQueue() {

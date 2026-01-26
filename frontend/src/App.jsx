@@ -6,7 +6,7 @@ import { GamesList } from './components/GamesList';
 import { QueuePanel } from './components/QueuePanel';
 import { ProcessedList } from './components/ProcessedList';
 import { useIndexBuilder } from './hooks/useIndexBuilder';
-import { getProcessed, getIndex } from './services/api';
+import { getProcessed, getIndex, queueAll } from './services/api';
 import { getConfig } from './services/configApi';
 
 function App() {
@@ -92,6 +92,26 @@ function App() {
     localStorage.setItem('vimms_workspace_root', workspace);
   };
 
+  const handleQueueAll = async () => {
+    if (!workspaceRoot) {
+      alert('❌ Workspace root not set. Please initialize the index first.');
+      return;
+    }
+    
+    const consoleCount = consoles.length;
+    if (!confirm(`Queue all ${consoleCount} console${consoleCount !== 1 ? 's' : ''} for download?\n\nThis will run the same process as "run_vimms.py" and download all games from all consoles in priority order.\n\nThis may take a very long time. Continue?`)) {
+      return;
+    }
+    
+    try {
+      await queueAll(workspaceRoot);
+      alert(`✓ Successfully queued all ${consoleCount} console${consoleCount !== 1 ? 's' : ''} for download\n\nThe CLI script will process each console in priority order.\nCheck the Queue panel to monitor progress.`);
+    } catch (error) {
+      console.error('Failed to queue all:', error);
+      alert('❌ Failed to queue all consoles: ' + error.message);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:bg-gradient-to-br dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
@@ -107,14 +127,28 @@ function App() {
               )}
             </p>
           </div>
-          {isIncomplete && !isBuilding && (
-            <div className="flex items-center gap-2 bg-yellow-500/20 dark:bg-yellow-600/30 px-3 py-2 rounded-lg">
-              <svg className="w-5 h-5 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              <span className="text-sm text-yellow-100 dark:text-yellow-200">Index incomplete - auto-building...</span>
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            {workspaceRoot && consoles.length > 0 && (
+              <button
+                onClick={handleQueueAll}
+                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                title={`Download all games from all ${consoles.length} console${consoles.length !== 1 ? 's' : ''} (runs run_vimms.py)`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Queue All ({consoles.length} console{consoles.length !== 1 ? 's' : ''})
+              </button>
+            )}
+            {isIncomplete && !isBuilding && (
+              <div className="flex items-center gap-2 bg-yellow-500/20 dark:bg-yellow-600/30 px-3 py-2 rounded-lg">
+                <svg className="w-5 h-5 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span className="text-sm text-yellow-100 dark:text-yellow-200">Index incomplete - auto-building...</span>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

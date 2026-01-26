@@ -4,10 +4,12 @@ Purpose: Give an AI coding agent the essential, actionable knowledge to be immed
 
 Quick summary
 
-- **Web UI**: React + Tailwind CSS frontend (`frontend/`) served by Flask (`src/webapp.py`) on port 8000 with progressive index building and real-time download queue.
-- **Canonical downloader**: `download_vimms.py` (workspace root) — fetches games from Vimm's Lair and writes progress to `download_progress.json`.
-- **Runner**: `run_vimms.py` — orchestrates per-console runs, reads `vimms_config.json` (workspace root) and optionally per-folder `vimms_folder.json`.
-- **Utility scripts**: `clean_filenames.py`, `fix_folder_names.py` (see examples below).
+- **Web UI**: React + Tailwind CSS frontend (`frontend/`) served by Flask (`src/webapp.py`) on port 8000 with auto-build, progressive index building, resume capability, and real-time download queue.
+- **Index resume logic**: Preserves only completed consoles from previous index, re-indexes incomplete ones to ensure fresh data (ratings, file counts).
+- **CLI tools**: All command-line scripts in `cli/` folder (organized separately from web interface).
+- **Canonical downloader**: `cli/download_vimms.py` — fetches games from Vimm's Lair and writes progress to `download_progress.json`.
+- **Runner**: `cli/run_vimms.py` — orchestrates per-console runs, reads `vimms_config.json` (workspace root) with priority-based ordering.
+- **Utility scripts**: `cli/clean_filenames.py`, `cli/fix_folder_names.py` (see examples below).
 
 How to run (developer workflow) 🔧
 
@@ -34,35 +36,54 @@ How to run (developer workflow) 🔧
   pip install -r requirements.txt
 
 - Dry-run the runner (safe):
-  python run_vimms.py --dry-run
+  python cli/run_vimms.py --dry-run
 
-- Run a single console folder (non-interactive):
-  python run_vimms.py --folder "DS" --no-prompt --extract-files
+- Run a single console folder (non-interactive by default):
+  python cli/run_vimms.py --folder "DS" --extract-files
 
-- Run the canonical downloader directly (for a folder):
-  python download_vimms.py --folder "C:/path/to/DS" --no-prompt
+- Runtime root resolution (in order of precedence):
+
+  1. CLI flag: --src <path>
+  2. Config workspace_root: vimms_config.json "workspace_root" key
+  3. Config src: vimms_config.json "src" key (legacy)
+  4. Script location: directory containing run_vimms.py
+
+- Run the canonical downloader directly (non-interactive by default):
+  python cli/download_vimms.py --folder "C:/path/to/DS"
+
+- Enable interactive prompts (when needed):
+  python cli/run_vimms.py --folder "DS" --prompt
+  python cli/download_vimms.py --folder "C:/path/to/DS" --prompt
 
 Key files & patterns (what to look at) 🔍
 
 - **Web UI**:
-  - `src/webapp.py` — Flask backend: API endpoints (`/api/*`), worker thread, index building, serves React build from `webui_static/dist`
-  - `frontend/src/App.jsx` — Main React component, orchestrates all UI components
+  - `src/webapp.py` — Flask backend: API endpoints (`/api/*`), worker thread, index building with resume logic, serves React build from `webui_static/dist`
+  - `frontend/src/App.jsx` — Main React component, simplified UI (no Settings menu or manual sync controls)
   - `frontend/src/components/` — React components (WorkspaceInit, ConsoleGrid, SectionBrowser, GamesList, QueuePanel, ProcessedList)
   - `frontend/src/services/api.js` — API client functions for all Flask endpoints
-  - `frontend/src/hooks/useIndexBuilder.js` — Custom hook for progressive index updates (polls every 500ms)
+  - `frontend/src/hooks/useIndexBuilder.js` — Custom hook for progressive index updates with auto-build (polls every 500ms)
   - Build output: `src/webui_static/dist/` — Vite-built static files served by Flask
 - **Downloader Core**:
-  - `download_vimms.py` — main logic: sections listing, `VimmsDownloader` class, detection and download flow, progress handling, logging
+  - `cli/download_vimms.py` — main logic: sections listing, `VimmsDownloader` class, detection and download flow, progress handling, logging
     - progress file saved as `<folder>/download_progress.json` (tracks 'completed', 'failed', 'last_section')
     - per-download logging file: `ROMs/vimms_downloader.log`
     - failed HTTP bodies saved under `ROMs/failed_responses/`
-  - `run_vimms.py` — orchestration: resolves targets, loads `vimms_config.json`, supports legacy whitelist/blacklist, supports `--report` to write `progress_report.json`
-  - `vimms_config.json` (workspace root) preferred for global folder mapping; per-folder fallback: `vimms_folder.json` in console folder
-  - `clean_filenames.py` — canonical cleaning rules used by the downloader (`_clean_filename`) — prefer keeping logic in sync
-  - `fix_folder_names.py` — utility to infer console by extensions and propose safe renames
+  - `cli/run_vimms.py` — orchestration: resolves targets, loads `vimms_config.json`, reads `workspace_root` from config, supports `--report` to write `progress_report.json`
+  - `vimms_config.json` (workspace root) preferred for global folder mapping with priority ordering; folder names should match Vimm system codes
+  - `cli/clean_filenames.py` — canonical cleaning rules used by the downloader (`_clean_filename`) — prefer keeping logic in sync
+  - `cli/fix_folder_names.py` — utility to infer console by extensions and propose safe renames
+- **Shared Libraries**:
+  - `downloader_lib/` — parsing and fetching utilities shared by CLI and web interface
+    - `fetch.py` — network helpers (`fetch_section_page`, `fetch_game_page`)
+    - `parse.py` — HTML parsing (`parse_games_from_section`, `resolve_download_form`, `parse_game_details`)
+  - `utils/` — filename and constant utilities (`clean_filename`, `normalize_for_match`, `ROM_EXTENSIONS`, `USER_AGENTS`)
 
 Project-specific conventions & behaviors ⚠️
 
+- **Prompting behavior**: Both `download_vimms.py` and `run_vimms.py` are non-interactive by default. Use `--prompt` flag to enable interactive prompts. The `run_vimms.py` script correctly forwards `--prompt` to the downloader (not `--no-prompt`).
+- **Index resume behavior**: Web UI preserves only completed consoles (`complete: true`) from existing index, re-indexes incomplete ones to ensure fresh data. Avoid file changes during builds to prevent Werkzeug auto-reload interruptions.
+- **Console configuration**: `vimms_config.json` uses priority-based ordering and folder names matching Vimm system codes (DS, GBA, PS2, etc.). See `CONSOLE_MAP` for folder → system code mapping.
 - Preferred ROM folder: downloader creates/uses a `ROMs` subfolder inside each console folder; inspect there for progress and logs.
 - Local-detection heuristic (avoid re-downloads): normalization → substring containment (A in B) → fuzzy ratio (threshold 0.75 by default). See `_normalize_for_match`, `find_all_matching_files`, and `is_game_present`.
 - Indexing: `pre_scan` builds an in-memory index limited by `limits.index_max_files` (default 20000) to speed detection.
@@ -87,11 +108,11 @@ Debugging tips 🐞
 
 - For download issues: check `ROMs/vimms_downloader.log` and `ROMs/failed_responses/` for saved responses.
 - Reproduce network behavior: use `--section-priority` to run a small section, or `--no-detect-existing` to force downloads of sample items.
-- To debug filename normalization, use `clean_filenames.py` in preview mode (`dry-run`) before applying renames.
+- To debug filename normalization, use `cli/clean_filenames.py` in preview mode (`dry-run`) before applying renames.
 
 Examples to reference in code (use these snippets as test cases)
 
-- Filename cleaning: input: `005 4426__MY_GAME_(EU).nds` → `MY GAME.nds` (see `_clean_filename` / `clean_filename`)
+- Filename cleaning: input: `005 4426__MY_GAME_(EU).nds` → `MY GAME.nds` (see `_clean_filename` in `cli/download_vimms.py` and `clean_filename` in `cli/clean_filenames.py`)
 - Local detection threshold: fuzzy match ratio >= 0.75 (see `limits.match_threshold` default)
 - Config example shown in `README_VIMMS.md` (`vimms_config.json` mapping style)
 

@@ -2,6 +2,13 @@
 
 Brief: a small toolset to download and clean ROMs from Vimm's Lair.
 
+**Two ways to use:**
+
+- 🌐 **Web Interface** — Modern React UI with progressive scanning and download queue → [Jump to Web UI](#quick-start---web-interface-)
+- 🔧 **Command Line** — Batch processing and automation → [Jump to CLI](#command-line-usage-) or see [cli/README.md](cli/README.md)
+
+---
+
 ## Quick Start - Web Interface 🌐
 
 **Modern React + Tailwind CSS UI** with progressive workspace scanning and real-time download queue!
@@ -40,10 +47,11 @@ python src/webapp.py
 **4. Use the interface:**
 
 - Enter your workspace root path (e.g., `C:\ROMs` or `H:/Games`)
-- Click **Initialize Index** to scan all console folders
-- Watch consoles appear progressively as they're scanned (real-time updates)
+- Index builds automatically when workspace is set (watch yellow indicator in header)
+- Consoles appear progressively as they're scanned (real-time updates)
+- Index resumes from completed consoles on restart (only re-indexes incomplete ones)
 - Select a console to browse sections (A-Z, 0-9, #)
-- Click sections to view games with local presence detection
+- Click sections to view games with local presence detection and ratings
 - Click **Add to Queue** on games you want to download
 - Downloads run in background worker thread
 - Check the floating **Queue** button (bottom-right) for download status and progress
@@ -87,6 +95,8 @@ See [frontend/README.md](frontend/README.md) for detailed frontend development d
 
 ## Command Line Usage 🔧
 
+All CLI tools are organized in the `cli/` folder. See [cli/README.md](cli/README.md) for detailed documentation.
+
 Getting started ✅
 
 - Dependencies are listed in `requirements.txt`. Install them in a venv:
@@ -98,14 +108,34 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+**Configuration with `vimms_config.json`:**
+
+- Create `vimms_config.json` in the repository root to configure your workspace and console folders:
+
+```json
+{
+  "workspace_root": "H:/Games",
+  "folders": {
+    "DS": {"priority": 1, "active": true, "extract_files": true},
+    "GBA": {"priority": 2, "active": true},
+    "PS2": {"priority": 3, "active": true}
+  }
+}
+```
+
+- See [README_VIMMS.md](README_VIMMS.md) for complete console names and configuration options.
+- See [cli/README.md](cli/README.md) for CLI usage examples.
+
 Running downloads 🔧
 
-- Preferred entrypoint: `run_vimms.py`.
-  - Example: `python run_vimms.py --folder "G:/My Drive/Games/PS2"`
-  - Pass `--no-prompt` to run non-interactively.
+- Preferred entrypoint: `cli/run_vimms.py` (processes all active consoles in priority order).
+  - Preview what will run: `python cli/run_vimms.py --dry-run`
+  - Run all active consoles: `python cli/run_vimms.py` (non-interactive by default)
+  - Run single console: `python cli/run_vimms.py --folder "DS"`
+  - Enable interactive prompts: `python cli/run_vimms.py --prompt`
   - Pass `--no-detect-existing` to disable fuzzy-local-file detection (force downloads).
-    - Pass `--delete-duplicates` to enable prompting to remove redundant local files when multiple matches are found.
-    - Add `--yes-delete` to auto-confirm deletion of duplicates (use with caution; duplicates are moved to `scripts/deleted_duplicates/` timestamped folders).
+  - Pass `--delete-duplicates` to enable prompting to remove redundant local files when multiple matches are found.
+  - Add `--yes-delete` to auto-confirm deletion of duplicates (use with caution; duplicates are moved to `scripts/deleted_duplicates/` timestamped folders).
 
 Notes about detection 💡
 
@@ -117,10 +147,23 @@ Notes about detection 💡
 
 Repository layout 🔍
 
-- `download_vimms.py` — canonical downloader at the workspace root (used by the runner)
-- `run_vimms.py` — small wrapper to call `download_vimms.py` against any folder
-- `clean_filenames.py` — filename cleaner; runs on the folder it's executed within
-- `requirements.txt` — pip requirements used by the downloader
+- `cli/` — Command-line tools (see [cli/README.md](cli/README.md))
+  - `download_vimms.py` — canonical downloader
+  - `run_vimms.py` — orchestrator for multiple consoles
+  - `clean_filenames.py` — filename cleaner
+  - `fix_folder_names.py` — console folder name fixer
+- `src/` — Web interface
+  - `webapp.py` — Flask backend
+  - `webui_static/` — React frontend build output
+- `frontend/` — React source code
+- `downloader_lib/` — Shared parsing/fetching modules (see [downloader_lib/README.md](downloader_lib/README.md))
+  - `fetch.py` — Network fetching utilities
+  - `parse.py` — HTML parsing utilities
+  - Used by both CLI and web interface
+- `utils/` — Shared utilities (filenames, constants)
+- `tests/` — Unit tests
+- `vimms_config.json` — Console configuration
+- `requirements.txt` — Python dependencies
 
 Testing ✅
 

@@ -10,12 +10,22 @@ export function GamesList({ games, processedIds = [], folder }) {
   }, [games]);
 
   const handleAddToQueue = async (game) => {
+    const gameName = game.title || game.name;
     try {
-      await addToQueue({ folder, game_id: game.game_id, title: game.name || game.title });
-      alert(`Added "${game.title || game.name}" to download queue`);
+      // Send the complete game object with folder info
+      await addToQueue({ 
+        folder, 
+        game: {
+          game_id: game.game_id,
+          name: game.name || game.title,
+          page_url: game.page_url || `https://vimm.net/vault/${game.game_id}`,
+          section: game.section
+        }
+      });
+      alert(`✓ Added "${gameName}" to download queue\n\nCheck the Queue panel to monitor download progress.`);
     } catch (error) {
       console.error('Failed to add to queue:', error);
-      alert('Failed to add to queue: ' + error.message);
+      alert('✖ Failed to add to queue: ' + error.message);
     }
   };
 
@@ -86,6 +96,7 @@ export function GamesList({ games, processedIds = [], folder }) {
                         <button
                           onClick={() => handleAddToQueue(game)}
                           disabled={isProcessed}
+                          title={isProcessed ? 'Already queued for download' : 'Add this game to the download queue'}
                           className={`
                             px-3 py-1 rounded-lg text-sm font-medium transition-all
                             ${isProcessed
@@ -94,7 +105,7 @@ export function GamesList({ games, processedIds = [], folder }) {
                             }
                           `}
                         >
-                          {isProcessed ? 'Queued' : 'Download'}
+                          {isProcessed ? 'Queued' : 'Queue Download'}
                         </button>
                       </div>
                     )}

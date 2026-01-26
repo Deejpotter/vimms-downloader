@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getSectionGames } from '../services/api';
+import { getSectionGames, queueSection } from '../services/api';
 
 export function SectionBrowser({ selectedConsole, onGamesLoad }) {
   const [selectedSection, setSelectedSection] = useState(null);
@@ -25,6 +25,18 @@ export function SectionBrowser({ selectedConsole, onGamesLoad }) {
     }
   };
 
+  const handleQueueSection = async (e, section) => {
+    e.stopPropagation(); // Prevent section loading
+    const count = sections[section];
+    try {
+      await queueSection(selectedConsole.folder, section, selectedConsole.name);
+      alert(`✓ Successfully queued ${selectedConsole.name} section "${section}" for download\n\nThis section contains ${count} game${count !== 1 ? 's' : ''}.\nCheck the Queue panel to monitor progress.`);
+    } catch (error) {
+      console.error('Failed to queue section:', error);
+      alert('❌ Failed to queue section: ' + error.message);
+    }
+  };
+
   useEffect(() => {
     setSelectedSection(null);
   }, [selectedConsole]);
@@ -45,23 +57,33 @@ export function SectionBrowser({ selectedConsole, onGamesLoad }) {
           const isSelected = selectedSection === section;
 
           return (
-            <button
-              key={section}
-              onClick={() => handleSectionClick(section)}
-              disabled={isEmpty || loading}
-              className={`
-                px-3 py-2 rounded-lg font-medium text-sm transition-all
-                ${isSelected
-                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 dark:from-purple-800 dark:to-indigo-900 text-white shadow-md'
-                  : isEmpty
-                  ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 hover:shadow-sm'
-                }
-              `}
-            >
-              <div>{section}</div>
-              <div className="text-xs opacity-75">{count}</div>
-            </button>
+            <div key={section} className="relative">
+              <button
+                onClick={() => handleSectionClick(section)}
+                disabled={isEmpty || loading}
+                className={`
+                  w-full px-3 py-2 rounded-lg font-medium text-sm transition-all
+                  ${isSelected
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 dark:from-purple-800 dark:to-indigo-900 text-white shadow-md'
+                    : isEmpty
+                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 hover:shadow-sm'
+                  }
+                `}
+              >
+                <div>{section}</div>
+                <div className="text-xs opacity-75">{count}</div>
+              </button>
+              {!isEmpty && (
+                <button
+                  onClick={(e) => handleQueueSection(e, section)}
+                  className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 hover:bg-green-600 text-white rounded-full text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center"
+                  title={`Queue all ${count} game${count !== 1 ? 's' : ''} in section "${section}"`}
+                >
+                  +
+                </button>
+              )}
+            </div>
           );
         })}
       </div>

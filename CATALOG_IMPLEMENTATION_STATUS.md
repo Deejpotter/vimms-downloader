@@ -1,11 +1,16 @@
 # Remote Catalog & Fast Index Build - Implementation Status
 
+> **⚠️ DEPRECATED**: This implementation has been superseded by the simplified auto-build system.  
+> **Current approach**: Single unified index build with resume capability (preserves completed consoles).  
+> See [README.md](README.md) and [copilot-instructions.md](.github/copilot-instructions.md) for current architecture.
+
 **Date**: January 26, 2026  
-**Status**: Backend complete, Frontend complete, Testing in progress
+**Original Status**: Backend complete, Frontend complete  
+**Note**: Settings menu and manual catalog controls removed in favor of auto-build
 
-## Overview
+## Historical Overview
 
-Successfully separated index building into two distinct operations:
+This document describes an earlier implementation that separated index building into two distinct operations:
 
 1. **Remote Catalog Build** - Fetch game metadata from Vimm's Lair (one-time, 15-30 min)
 2. **Fast Index Build** - Scan local files using cached catalog (<1 second)

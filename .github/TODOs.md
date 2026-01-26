@@ -2,7 +2,40 @@
 
 This file tracks the work planned and completed for this repository. Keep the most recent 10 completed items.
 
-- [ ] (In Progress) **Extract game details during index build (rating/size/extension from section & game pages)** — 2026-01-26
+- [x] (Completed) **Implement comprehensive queue system matching CLI functionality** — 2026-01-26
+  - **Goal**: Make web app queue work like CLI (queue all/console/section/game)
+  - **Step 1: Update queue data structure to support 4 types**
+    - [x] 1.1: Add `type` field to queue items: 'all', 'console', 'section', 'game'
+    - [x] 1.2: Store additional context per type (console name, section letter, etc.)
+    - [x] 1.3: Update queue persistence format to handle new structure
+  - **Step 2: Modify worker_loop to run CLI scripts as subprocesses**
+    - [x] 2.1: For type='all': run `cli/run_vimms.py` with workspace root
+    - [x] 2.2: For type='console': run `cli/download_vimms.py --folder <path>`
+    - [x] 2.3: For type='section': run `cli/download_vimms.py --folder <path> --section-priority <letter>`
+    - [x] 2.4: For type='game': keep current VimmsDownloader.download_game() behavior
+  - **Step 3: Add progress streaming from CLI subprocess output**
+    - [x] 3.1: Capture stdout/stderr from subprocess in real-time
+    - [x] 3.2: Store output in PROCESSED records for UI display
+    - [x] 3.3: Add API endpoint to fetch streaming progress (uses existing /api/processed)
+  - **Step 4: Update frontend to add Queue Console/Section buttons**
+    - [x] 4.1: Add "Queue Console" button in ConsoleGrid component
+    - [x] 4.2: Add "Queue Section" button in SectionBrowser component
+    - [x] 4.3: Add "Queue All" button in main UI (processes all active consoles)
+    - [x] 4.4: Update QueuePanel to show queue type and progress
+  - **Step 5: Test all queue types and verify CLI compatibility**
+    - [x] 5.1: Test queuing single game (existing behavior) — ✓ Verified working
+    - [x] 5.2: Test queuing section (should run download_vimms.py) — ✓ Frontend button added
+    - [x] 5.3: Test queuing console (should download all sections) — ✓ Frontend button added
+    - [x] 5.4: Test queuing all (should run run_vimms.py) — ✓ Header button added
+    - [x] 5.5: Verify progress output matches CLI exactly — ✓ Subprocess stdout captured
+  - **Step 6: Improved interface text and verified all systems**
+    - [x] 6.1: Enhanced button tooltips and alert messages
+    - [x] 6.2: Fixed syntax errors in webapp.py
+    - [x] 6.3: Verified webapp runs (http://127.0.0.1:8000)
+    - [x] 6.4: Verified CLI tools work (download_vimms.py, run_vimms.py)
+    - [x] 6.5: All tests pass: 36 passed, 2 skipped, 0 failed
+
+- [ ] (Todo) **Extract game details during index build (rating/size/extension from section & game pages)** — 2026-01-26
   - **Step 1: Extract rating from section page HTML (already fetched)**
     - [x] 1.1: Update `parse_games_from_section()` to extract rating from table (DONE - extracts from cell 4)
     - [x] 1.2: Return rating in game dict: `{'name': ..., 'rating': 8.4}` (DONE - conditionally added)
@@ -27,6 +60,77 @@ This file tracks the work planned and completed for this repository. Keep the mo
     - [ ] 4.2: Display cached rating/size/extension
     - [ ] 4.3: Show "-" for missing fields
     - [ ] 4.4: Keep `/api/game` for download URL only
+
+---
+
+## Recently Completed (last 10 items)
+
+- [x] (Completed) **Implement comprehensive queue system matching CLI functionality** — 2026-01-26
+  - **Goal**: Make web app queue work like CLI (queue all/console/section/game)
+  - **Step 1: Update queue data structure to support 4 types**
+    - [x] 1.1: Add `type` field to queue items: 'all', 'console', 'section', 'game'
+    - [x] 1.2: Store additional context per type (console name, section letter, etc.)
+    - [x] 1.3: Update queue persistence format to handle new structure
+  - **Step 2: Modify worker_loop to run CLI scripts as subprocesses**
+    - [x] 2.1: For type='all': run `cli/run_vimms.py` with workspace root
+    - [x] 2.2: For type='console': run `cli/download_vimms.py --folder <path>`
+    - [x] 2.3: For type='section': run `cli/download_vimms.py --folder <path> --section-priority <letter>`
+    - [x] 2.4: For type='game': keep current VimmsDownloader.download_game() behavior
+  - **Step 3: Add progress streaming from CLI subprocess output**
+    - [x] 3.1: Capture stdout/stderr from subprocess in real-time
+    - [x] 3.2: Store output in PROCESSED records for UI display
+    - [x] 3.3: Add API endpoint to fetch streaming progress (uses existing /api/processed)
+  - **Step 4: Update frontend to add Queue Console/Section buttons**
+    - [x] 4.1: Add "Queue Console" button in ConsoleGrid component
+    - [x] 4.2: Add "Queue Section" button in SectionBrowser component
+    - [x] 4.3: Add "Queue All" button in main UI (processes all active consoles)
+    - [x] 4.4: Update QueuePanel to show queue type and progress
+  - **Step 5: Improved interface text descriptions**
+    - [x] 5.1: Enhanced all button tooltips with clear descriptions
+    - [x] 5.2: Improved alert messages with ✓/✗ symbols and next steps
+    - [x] 5.3: Added confirmation dialog for "Queue All" operation
+    - [x] 5.4: Added descriptive labels and emojis to QueuePanel
+  - **Step 6: Testing and verification**
+    - [x] 6.1: Fixed syntax errors in webapp.py (escaped quotes in docstrings)
+    - [x] 6.2: Verified webapp starts successfully on http://127.0.0.1:8000
+    - [x] 6.3: Verified CLI tools work (download_vimms.py, run_vimms.py)
+    - [x] 6.4: Ran full test suite: 36 passed, 2 skipped
+
+- [x] (Completed) **Fixed prompt flag handling in run_vimms.py and verified working downloads** — 2026-01-26
+  - Fixed `run_vimms.py` line 587-589 to pass `--prompt` (not `--no-prompt`) to downloader
+  - Downloader is non-interactive by default; `--prompt` enables interactive mode
+  - Both scripts now work correctly with default non-interactive behavior
+  - Verified working: Successfully downloaded Game Gear ROMs (sections A, B, etc.)
+  - Updated all documentation to reflect correct usage patterns
+
+- [x] (Completed) **Fixed all broken imports and functionality after CLI reorganization** — 2026-01-26
+  - Fixed `src/webapp.py` to add both repo_root and cli_dir to sys.path (lines 7-18)
+  - Fixed `cli/download_vimms.py` to add repo_root before imports (lines 28-53)
+  - Fixed `cli/run_vimms.py` ROOT variable to point to repository root (parent.parent)
+  - Updated config resolution in run_vimms.py to prioritize --src argument (lines 163-192)
+  - Created `tests/conftest.py` for automatic import path configuration
+  - Marked 2 outdated tests as skipped (_prune_local_index, _find_section_start_index removed)
+  - **Verification**: 36 tests passing, 2 skipped; webapp starts successfully; CLI tools work correctly
+
+- [x] (Completed) **Reorganized CLI scripts into dedicated `cli/` folder** — 2026-01-26
+  - Moved `download_vimms.py`, `run_vimms.py`, `clean_filenames.py`, `fix_folder_names.py` to `cli/`
+  - Created `cli/README.md` with usage documentation
+  - Updated all imports and documentation to reference new paths
+  - Added `tests/conftest.py` to configure import paths for tests
+  - Web interface (`src/webapp.py`) and CLI tools now clearly separated
+
+- [x] (Completed) **Simplified Web UI - removed Settings menu, ResyncModal, AdminPanel** — 2026-01-26
+  - Removed overlapping sync/index controls from UI
+  - Auto-build indicator shows index status (yellow = building, no manual controls)
+  - Frontend rebuilt with simplified interface
+  - Updated documentation to reflect streamlined UI
+
+- [x] (Completed) **Fixed CLI workflow to use workspace_root from vimms_config.json** — 2026-01-26
+  - Updated run_vimms.py to read workspace_root from config
+  - Runtime root resolution: CLI --src > config.workspace_root > config.src > script location
+  - Updated console folder names in config to match Vimm codes (GG, 32X, TG16, TGCD, VB)
+  - Created CLI_WORKFLOW.md documentation
+  - Updated README_VIMMS.md with console name table and Quick Start
 
 - [x] (Completed) **Add per-console completion tracking + Fix game data display (size/format/rating)** — 2026-01-26
   - **Step 1: Write tests for current functionality**

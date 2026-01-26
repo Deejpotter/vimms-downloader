@@ -19,8 +19,10 @@ def test_run_vimms_dry_run_lists_planned_folders(tmp_path, capsys):
     with open(root / 'vimms_config.json', 'w', encoding='utf-8') as f:
         json.dump(cfg, f)
 
-    # Place a stub canonical downloader so runner doesn't abort
-    (root / 'download_vimms.py').write_text('# stub')
+    # Place a stub canonical downloader in cli/ folder so runner doesn't abort
+    cli_dir = root / 'cli'
+    cli_dir.mkdir()
+    (cli_dir / 'download_vimms.py').write_text('# stub')
 
     # Run runner in dry-run mode targeting our tmp workspace
     main(['--src', str(root), '--dry-run'])
@@ -28,4 +30,5 @@ def test_run_vimms_dry_run_lists_planned_folders(tmp_path, capsys):
     captured = capsys.readouterr()
     assert 'Dry-run mode: planned runs' in captured.out
     assert 'DS' in captured.out
-    assert 'GBA' in captured.out
+    # GBA is marked active=false, so it should NOT appear in the output
+    assert 'GBA' not in captured.out or 'Skipping' in captured.out

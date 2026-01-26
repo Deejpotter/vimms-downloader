@@ -89,30 +89,56 @@ export function QueuePanel() {
                 </button>
 
                 <div className="space-y-4">
-                  {queue.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 dark:bg-gray-700"
-                    >
-                      <div className="font-medium text-sm mb-2 dark:text-white">{item.title}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        {item.console} • {item.size}
-                      </div>
-                      {item.status === 'downloading' && (
-                        <div className="mt-2">
-                          <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                            <div
-                              className="bg-gradient-to-r from-purple-600 to-indigo-600 dark:from-purple-800 dark:to-indigo-900 h-2 rounded-full transition-all"
-                              style={{ width: `${item.progress || 0}%` }}
-                            ></div>
-                          </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                            {item.progress || 0}%
-                          </div>
+                  {queue.map((item, idx) => {
+                    const queueType = item.type || 'game';
+                    const typeLabels = {
+                      'all': '🌍 All Consoles',
+                      'console': '📦 Full Console',
+                      'section': '📁 Section',
+                      'game': '🎮 Single Game'
+                    };
+                    const typeDescriptions = {
+                      'all': 'Downloading all consoles via run_vimms.py',
+                      'console': 'Downloading all sections of this console',
+                      'section': 'Downloading all games in this section',
+                      'game': 'Downloading single game'
+                    };
+                    const typeLabel = typeLabels[queueType] || queueType;
+                    const typeDesc = typeDescriptions[queueType] || '';
+
+                    return (
+                      <div
+                        key={idx}
+                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 dark:bg-gray-700"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="font-medium text-sm dark:text-white">{item.title}</div>
+                          <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded font-medium">
+                            {typeLabel}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                          {item.console} • {item.size}
+                        </div>
+                        <div className="text-xs text-gray-400 dark:text-gray-500 italic">
+                          {typeDesc}
+                        </div>
+                        {item.status === 'downloading' && (
+                          <div className="mt-2">
+                            <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                              <div
+                                className="bg-gradient-to-r from-purple-600 to-indigo-600 dark:from-purple-800 dark:to-indigo-900 h-2 rounded-full transition-all"
+                                style={{ width: `${item.progress || 0}%` }}
+                              ></div>
+                            </div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                              {item.progress || 0}%
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}
