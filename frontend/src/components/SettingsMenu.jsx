@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { refreshIndex, buildRemoteCatalog, getRemoteCatalogProgress } from '../services/api';
+import { buildIndex, buildIndexFast, getRemoteCatalog, buildRemoteCatalog, getRemoteCatalogProgress } from '../services/api';
 
 export default function SettingsMenu() {
   const [open, setOpen] = useState(false);
@@ -37,7 +37,31 @@ export default function SettingsMenu() {
     setReinitializing(true);
     setOpen(false);
     try {
-      await refreshIndex();
+      // Get workspace root from localStorage
+      const workspaceRoot = localStorage.getItem('vimms_workspace_root');
+      
+      if (!workspaceRoot) {
+        alert('No workspace root found. Please set up your workspace first.');
+        return;
+      }
+      
+      // Check if remote catalog exists - if so, use fast build
+      let useFastBuild = false;
+      try {
+        await getRemoteCatalog();
+        useFastBuild = true;
+        console.log('Remote catalog exists - using fast rebuild');
+      } catch {
+        console.log('No remote catalog - using full rebuild');
+      }
+      
+      // Build index (fast or full depending on catalog availability)
+      if (useFastBuild) {
+        await buildIndexFast(workspaceRoot);
+      } else {
+        await buildIndex(workspaceRoot);
+      }
+      
       // Reload page to restart UI
       window.location.reload();
     } catch (error) {
@@ -54,10 +78,17 @@ export default function SettingsMenu() {
     }
     
     setOpen(false);
+    
+    // Get workspace root from localStorage (same key as App.jsx)
+    const workspaceRoot = localStorage.getItem('vimms_workspace_root');
+    
+    if (!workspaceRoot) {
+      alert('No workspace root found. Please set up your workspace first.');
+      return;
+    }
+    
     setCatalogBuilding(true);
     try {
-      // Get workspace root from current index
-      const workspaceRoot = localStorage.getItem('workspace_root') || 'H:/Games';
       await buildRemoteCatalog(workspaceRoot);
     } catch (error) {
       console.error('Failed to refresh catalog:', error);

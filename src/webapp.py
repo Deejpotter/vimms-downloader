@@ -13,7 +13,7 @@ import json
 # Add parent directory to path to allow imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.download_vimms import VimmsDownloader, CONSOLE_MAP, SECTIONS
+from download_vimms import VimmsDownloader, CONSOLE_MAP, SECTIONS
 from downloader_lib.parse import parse_game_details
 
 # Try to import metadata functionality (optional)
@@ -32,7 +32,7 @@ app.secret_key = 'vimms-downloader-secret-key-change-in-production'
 BASE_DIR = Path(__file__).resolve().parent
 
 # Helper: infer console/system from a folder Path
-from src.download_vimms import CONSOLE_MAP
+from download_vimms import CONSOLE_MAP
 
 def detect_system_from_path(p: Path) -> str:
     """Return a console key inferred from a path's name or its parent."""
@@ -167,7 +167,7 @@ def api_index_build():
     logger.info(f"api_index_build: starting full scan of '{workspace_root}'")
     
     # Scan for console folders - both on disk and in config
-    from src.download_vimms import CONSOLE_MAP
+    from download_vimms import CONSOLE_MAP
     console_folders_set = set()
     
     # STEP 1: Create ALL configured folders FIRST
@@ -222,17 +222,45 @@ def api_index_build():
     
     logger.info(f"api_index_build: found {len(console_folders)} console folders: {console_folders}")
     
-    # Build index
+    # Load existing index to preserve completed consoles
+    existing_index = {}
+    index_file_path = BASE_DIR / 'webui_index.json'
+    if index_file_path.exists():
+        try:
+            with open(index_file_path, 'r', encoding='utf-8') as f:
+                existing_index = json.load(f)
+            logger.info(f"api_index_build: loaded existing index with {len(existing_index.get('consoles', []))} consoles")
+        except Exception as e:
+            logger.warning(f"api_index_build: could not load existing index: {e}")
+    
+    # Build index - preserve only COMPLETED consoles from existing index
+    # Incomplete consoles need to be re-indexed to get latest data (ratings, etc.)
     index_data = {
         'workspace_root': str(root_path),
         'timestamp': datetime.utcnow().isoformat() + 'Z',
-        'consoles': [],
+        'consoles': [c for c in existing_index.get('consoles', []) if c.get('complete') == True],
         'complete': False  # Mark as incomplete until build finishes
     }
+    
+    if index_data['consoles']:
+        logger.info(f"api_index_build: preserved {len(index_data['consoles'])} completed consoles from previous index")
     
     total_games = 0
     for console_name in console_folders:
         system = CONSOLE_MAP.get(console_name, console_name)
+        
+        # Check if this console is already complete (resuming interrupted build)
+        already_complete = False
+        for existing_console in index_data.get('consoles', []):
+            if existing_console.get('name') == console_name and existing_console.get('complete') == True:
+                already_complete = True
+                total_games += sum(len(s) for s in existing_console.get('sections', {}).values())
+                INDEX_PROGRESS['consoles_done'] += 1
+                logger.info(f"api_index_build: skipping '{console_name}' (already complete)")
+                break
+        
+        if already_complete:
+            continue
         
         # Update progress
         INDEX_PROGRESS['current_console'] = console_name
@@ -258,8 +286,11 @@ def api_index_build():
                     'folder': str(console_folder),
                     'sections': {},
                     'total_games': 0,
-                    'exists': False
+                    'exists': False,
+                    'complete': True  # Mark as complete even if folder doesn't exist
                 }
+                # Remove any old entry for this console
+                index_data['consoles'] = [c for c in index_data.get('consoles', []) if c.get('name') != console_name]
                 index_data['consoles'].append(console_entry)
                 INDEX_PROGRESS['consoles_done'] += 1
                 continue
@@ -269,6 +300,15 @@ def api_index_build():
         target_folder = roms_folder if roms_folder.exists() else console_folder
         
         logger.info(f"api_index_build: scanning console '{console_name}' at '{target_folder}'")
+        logger.info(f"api_index_build: console_folder exists={console_folder.exists()}, roms_folder exists={roms_folder.exists()}")
+        
+        # Log what's actually in the folder for debugging
+        try:
+            if target_folder.exists():
+                file_count = sum(1 for _ in target_folder.iterdir())
+                logger.info(f"api_index_build: target_folder '{target_folder}' contains {file_count} items")
+        except Exception as e:
+            logger.warning(f"api_index_build: error counting items in '{target_folder}': {e}")
         
         try:
             # Create downloader with pre_scan to build local index
@@ -280,7 +320,13 @@ def api_index_build():
                 dl._build_local_index()
                 if dl.local_index is not None:
                     count_files = sum(len(v) for v in dl.local_index.values())
-                    logger.info(f"api_index_build: pre-scanned {count_files} files for '{console_name}'")
+                    count_keys = len(dl.local_index.keys())
+                    logger.info(f"api_index_build: pre-scanned {count_files} files ({count_keys} unique keys) for '{console_name}' in '{target_folder}'")
+                    # Log first few index keys for debugging
+                    sample_keys = list(dl.local_index.keys())[:5]
+                    logger.info(f"api_index_build: sample index keys: {sample_keys}")
+                else:
+                    logger.warning(f"api_index_build: local_index is None for '{console_name}' - pre_scan may have failed")
             
             # Scan all sections
             sections_data = {}
@@ -307,12 +353,18 @@ def api_index_build():
                             logger.exception(f"api_index_build: error checking '{game['name']}': {e}")
                             pass
                         
-                        annotated_games.append({
+                        game_entry = {
                             'id': game.get('game_id', ''),
                             'name': game.get('name', ''),
                             'url': game.get('page_url', ''),
                             'present': present
-                        })
+                        }
+                        
+                        # Preserve rating if extracted from section page
+                        if 'rating' in game:
+                            game_entry['rating'] = game['rating']
+                        
+                        annotated_games.append(game_entry)
                         total_games += 1
                         INDEX_PROGRESS['games_found'] = total_games
                     
@@ -327,8 +379,13 @@ def api_index_build():
                 'name': console_name,
                 'system': system,
                 'folder': str(target_folder),
-                'sections': sections_data
+                'sections': sections_data,
+                'complete': True  # Mark this console as complete
             }
+            
+            # Remove any old incomplete entry for this console
+            index_data['consoles'] = [c for c in index_data.get('consoles', []) if c.get('name') != console_name]
+            
             index_data['consoles'].append(console_entry)
             INDEX_PROGRESS['consoles_done'] += 1
             INDEX_PROGRESS['partial_consoles'].append(console_entry)  # Add to partial list for progressive UI
@@ -465,7 +522,7 @@ def api_catalog_remote_build():
     def build_remote_catalog():
         """Background thread to fetch remote game catalog."""
         global REMOTE_CATALOG_PROGRESS
-        from src.download_vimms import CONSOLE_MAP
+        from download_vimms import CONSOLE_MAP
         
         try:
             REMOTE_CATALOG_PROGRESS['in_progress'] = True
@@ -588,7 +645,7 @@ def api_index_build_fast():
 def api_index_build_fast_internal(workspace_root):
     """Internal helper for fast index build using cached remote catalog."""
     global CACHED_INDEX, DL_INSTANCES, INDEX_PROGRESS
-    from src.download_vimms import CONSOLE_MAP
+    from download_vimms import CONSOLE_MAP
     
     root_path = Path(workspace_root)
     
@@ -654,17 +711,55 @@ def api_index_build_fast_internal(workspace_root):
     
     logger.info(f"api_index_build_fast_internal: STEP 3 - Fast scanning {len(console_folders)} consoles")
     
-    # Build index
-    index_data = {
-        'workspace_root': str(root_path),
-        'timestamp': datetime.utcnow().isoformat() + 'Z',
-        'consoles': [],
-        'complete': False
-    }
+    # Build index (or load partial progress if resuming)
+    if INDEX_FILE.exists():
+        try:
+            with open(INDEX_FILE, 'r', encoding='utf-8') as f:
+                index_data = json.load(f)
+            if index_data.get('workspace_root') != str(root_path):
+                logger.info(f"api_index_build_fast_internal: existing index is for different workspace, starting fresh")
+                index_data = {
+                    'workspace_root': str(root_path),
+                    'timestamp': datetime.utcnow().isoformat() + 'Z',
+                    'consoles': [],
+                    'complete': False
+                }
+            else:
+                logger.info(f"api_index_build_fast_internal: resuming with {len(index_data.get('consoles', []))} consoles already complete")
+                index_data['timestamp'] = datetime.utcnow().isoformat() + 'Z'
+                index_data['complete'] = False
+        except Exception as e:
+            logger.warning(f"api_index_build_fast_internal: error loading partial index: {e}")
+            index_data = {
+                'workspace_root': str(root_path),
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'consoles': [],
+                'complete': False
+            }
+    else:
+        index_data = {
+            'workspace_root': str(root_path),
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'consoles': [],
+            'complete': False
+        }
     
     total_games = 0
     for console_name in console_folders:
         system = CONSOLE_MAP.get(console_name, console_name)
+        
+        # Check if this console is already complete
+        already_complete = False
+        for existing_console in index_data.get('consoles', []):
+            if existing_console.get('name') == console_name and existing_console.get('complete') == True:
+                already_complete = True
+                total_games += existing_console.get('total_games', 0)
+                INDEX_PROGRESS['consoles_done'] += 1
+                logger.info(f"api_index_build_fast_internal: skipping '{console_name}' (already complete)")
+                break
+        
+        if already_complete:
+            continue
         
         INDEX_PROGRESS['current_console'] = console_name
         INDEX_PROGRESS['sections_done'] = 0
@@ -710,12 +805,18 @@ def api_index_build_fast_internal(workspace_root):
                     except Exception as e:
                         logger.exception(f"api_index_build_fast_internal: error checking '{game['name']}': {e}")
                     
-                    annotated_games.append({
+                    game_entry = {
                         'id': game.get('id', ''),
                         'name': game.get('name', ''),
                         'url': game.get('url', ''),
                         'present': present
-                    })
+                    }
+                    
+                    # Preserve rating from cached catalog (from previous full build)
+                    if 'rating' in game:
+                        game_entry['rating'] = game['rating']
+                    
+                    annotated_games.append(game_entry)
                     total_games += 1
                     INDEX_PROGRESS['games_found'] = total_games
                 
@@ -728,8 +829,13 @@ def api_index_build_fast_internal(workspace_root):
                 'folder': str(console_folder),
                 'sections': sections_data,
                 'total_games': sum(len(s) for s in sections_data.values()),
-                'exists': True
+                'exists': True,
+                'complete': True  # Mark as complete
             }
+            
+            # Remove any old incomplete entry for this console
+            index_data['consoles'] = [c for c in index_data.get('consoles', []) if c.get('name') != console_name]
+            
             index_data['consoles'].append(console_entry)
             INDEX_PROGRESS['partial_consoles'].append(console_entry)
             INDEX_PROGRESS['consoles_done'] += 1
@@ -796,7 +902,7 @@ def api_index_build_internal(workspace_root):
     logger.info(f"api_index_build_internal: starting full scan of '{workspace_root}'")
     
     # Scan for console folders - both on disk and in config
-    from src.download_vimms import CONSOLE_MAP
+    from download_vimms import CONSOLE_MAP
     console_folders_set = set()
     
     # STEP 1: Create ALL configured folders FIRST
@@ -857,17 +963,47 @@ def api_index_build_internal(workspace_root):
     
     logger.info(f"api_index_build_internal: found {len(console_folders)} console folders: {console_folders}")
     
-    # Build index
+    # Load existing index to preserve completed consoles
+    existing_index = {}
+    index_file_path = BASE_DIR / 'webui_index.json'
+    if index_file_path.exists():
+        try:
+            with open(index_file_path, 'r', encoding='utf-8') as f:
+                existing_index = json.load(f)
+            logger.info(f"api_index_build_internal: loaded existing index with {len(existing_index.get('consoles', []))} consoles")
+        except Exception as e:
+            logger.warning(f"api_index_build_internal: could not load existing index: {e}")
+    
+    # Build index - preserve only COMPLETED consoles from existing index
+    # Incomplete consoles need to be re-indexed to get latest data (ratings, etc.)
     index_data = {
         'workspace_root': str(root_path),
         'timestamp': datetime.utcnow().isoformat() + 'Z',
-        'consoles': [],
+        'consoles': [c for c in existing_index.get('consoles', []) if c.get('complete') == True],
         'complete': False  # Mark as incomplete until build finishes
     }
+    
+    if index_data['consoles']:
+        logger.info(f"api_index_build_internal: preserved {len(index_data['consoles'])} completed consoles from previous index")
     
     total_games = 0
     for console_name in console_folders:
         system = CONSOLE_MAP.get(console_name, console_name)
+        
+        # Check if this console is already complete (resuming interrupted build)
+        already_complete = False
+        for existing_console in index_data.get('consoles', []):
+            if existing_console.get('name') == console_name and existing_console.get('complete') == True:
+                already_complete = True
+                # Calculate total games from sections
+                console_game_count = sum(len(section_games) for section_games in existing_console.get('sections', {}).values())
+                total_games += console_game_count
+                INDEX_PROGRESS['consoles_done'] += 1
+                logger.info(f"api_index_build_internal: skipping '{console_name}' (already complete)")
+                break
+        
+        if already_complete:
+            continue
         
         # Update progress
         INDEX_PROGRESS['current_console'] = console_name
@@ -1153,7 +1289,9 @@ def api_index_resync():
 
     return jsonify({'status': 'resync_started', 'consoles': consoles}), 202
 
-
+# NOTE: /api/init endpoint - Alternative initialization flow (currently unused by frontend)
+# The frontend now uses /api/index/build or /api/index/build_fast instead.
+# This endpoint is kept for potential future use or programmatic API access.
 @app.route('/api/init', methods=['POST'])
 def api_init():
     """Initialize downloader for a given folder path.
@@ -1260,8 +1398,12 @@ def api_init():
     return jsonify({'status': 'ok', 'folder': str(target_dir)})
 
 
+# NOTE: /api/sections endpoint - Returns static list of available sections (A-Z, 0-9, #)
+# Available for frontend to get section list without hardcoding.
+# Currently frontend has SECTIONS hardcoded but this endpoint is available if needed.
 @app.route('/api/sections', methods=['GET'])
 def api_sections():
+    """Return the list of available Vimm's Lair sections (A-Z, 0-9, #)."""
     return jsonify({'sections': SECTIONS})
 
 
@@ -1319,12 +1461,12 @@ def api_config_save():
         return jsonify({'error': 'folders missing or empty; use _force_save to override'}), 400
 
     try:
-        # Backup existing
+        # Backup existing config before saving
         if cfg_path.exists():
             bak = cfg_path.with_suffix('.json.bak')
-            cfg_path.replace(bak)
-            # write original back after backup rename
-            bak.rename(cfg_path)
+            import shutil
+            shutil.copy2(cfg_path, bak)
+            logger.info(f'api_config_save: backed up config to {bak}')
         
         # Sort folders by priority before saving
         if 'folders' in data and isinstance(data['folders'], dict):
@@ -1381,9 +1523,25 @@ def api_config_create_folders():
 
 @app.route('/api/section/<section>', methods=['GET'])
 def api_section(section):
-    global CURRENT_SYSTEM
+    """Get games for a section. Prefers cached index data, falls back to live fetch."""
+    global CURRENT_SYSTEM, CACHED_INDEX
     folder = request.args.get('folder')
-    # Fetch games in a section using the downloader instance if initialized, otherwise create a temporary one
+    
+    # Try to use cached index first (much faster and includes present status)
+    if CACHED_INDEX and folder:
+        # Find the console in the cached index
+        for console in CACHED_INDEX.get('consoles', []):
+            if console.get('folder') == folder or console.get('name') == folder:
+                section_games = console.get('sections', {}).get(section, [])
+                if section_games:
+                    # Debug: log first game to verify present status
+                    if section_games:
+                        first = section_games[0]
+                        logger.info(f"api_section: first game: {first.get('name')} present={first.get('present')} id={first.get('id')} game_id={first.get('game_id')}")
+                    logger.info(f"api_section: returning {len(section_games)} games from cached index for {folder}/{section}")
+                    return jsonify({'games': section_games})
+    
+    # Fall back to live fetch from Vimm's Lair
     dl = None
     if folder:
         # Accept either the exact registered key or try resolved Paths
@@ -1435,13 +1593,35 @@ def api_section(section):
     return jsonify({'games': annotated})
 
 
+@app.route('/api/debug/instances', methods=['GET'])
+def api_debug_instances():
+    """Debug endpoint to show downloader instances."""
+    return jsonify({
+        'instances': list(DL_INSTANCES.keys()),
+        'count': len(DL_INSTANCES)
+    })
+
+
 @app.route('/api/game/<game_id>', methods=['GET'])
 def api_game(game_id):
     folder = request.args.get('folder')
     url = f'https://vimm.net/vault/{game_id}'
+    
+    # Normalize folder path to match DL_INSTANCES keys (Windows uses backslashes)
+    if folder:
+        folder = str(Path(folder))
+    
     dl = DL_INSTANCES.get(folder) if folder else None
+    
+    # Debug logging
+    if not dl:
+        logger.warning(f"api_game: no downloader instance for folder='{folder}', available keys: {list(DL_INSTANCES.keys())[:5]}")
+    
     # Be robust against test/mocks that may not provide all attributes on the downloader instance
     session_arg = getattr(dl, 'session', None) if dl else None
+    
+    if dl and not session_arg:
+        logger.warning(f"api_game: downloader has no session for folder='{folder}'")
     cache_path_arg = None
     if dl and getattr(dl, 'download_dir', None):
         try:

@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { buildIndex } from '../services/api';
+import { buildIndex, buildIndexFast, getRemoteCatalog } from '../services/api';
+import { createConfiguredFolders } from '../services/configApi';
 
 const WORKSPACE_KEY = 'vimms_workspace_root';
 
 export function WorkspaceInit({ onBuildStart, onWorkspaceSet, progress, isBuilding, hasConsoles }) {
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [autoInitialized, setAutoInitialized] = useState(false);
+  const [useFastBuild, setUseFastBuild] = useState(false);
 
   // Load workspace root from localStorage on mount
   useEffect(() => {
@@ -13,6 +15,21 @@ export function WorkspaceInit({ onBuildStart, onWorkspaceSet, progress, isBuildi
     if (savedWorkspace) {
       setWorkspaceRoot(savedWorkspace);
     }
+  }, []);
+
+  // Check if remote catalog exists to enable fast build
+  useEffect(() => {
+    const checkRemoteCatalog = async () => {
+      try {
+        await getRemoteCatalog();
+        setUseFastBuild(true);
+        console.log('Remote catalog found - using fast index build');
+      } catch (error) {
+        setUseFastBuild(false);
+        console.log('No remote catalog - using full index build');
+      }
+    };
+    checkRemoteCatalog();
   }, []);
 
   // Auto-initialize when workspace root is set and no consoles exist yet
@@ -28,7 +45,24 @@ export function WorkspaceInit({ onBuildStart, onWorkspaceSet, progress, isBuildi
     
     try {
       onBuildStart();
-      await buildIndex(workspaceRoot);
+      
+      // Step 1: Auto-create configured folders first
+      try {
+        console.log('Creating configured console folders...');
+        await createConfiguredFolders({ workspace_root: workspaceRoot, active_only: true });
+      } catch (error) {
+        console.warn('Failed to create folders (may already exist):', error);
+      }
+      
+      // Step 2: Build index (fast if catalog exists, full otherwise)
+      if (useFastBuild) {
+        console.log('Using fast index build with cached remote catalog');
+        await buildIndexFast(workspaceRoot);
+      } else {
+        console.log('Using full index build (fetching from Vimm\'s Lair)');
+        await buildIndex(workspaceRoot);
+      }
+      
       localStorage.setItem(WORKSPACE_KEY, workspaceRoot);
       if (onWorkspaceSet) {
         onWorkspaceSet(workspaceRoot);
@@ -82,7 +116,7 @@ export function WorkspaceInit({ onBuildStart, onWorkspaceSet, progress, isBuildi
         <div className="mt-4">
           <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
             <span>
-              Scanning {progress.current_console || '...'} - Section {progress.current_section || '...'}
+              {useFastBuild ? '⚡ Fast Scan' : '🌐 Full Scan'} - {progress.current_console || '...'} - Section {progress.current_section || '...'}
             </span>
             <span>{progress.percent_complete || 0}% - {progress.total_games || 0} games</span>
           </div>

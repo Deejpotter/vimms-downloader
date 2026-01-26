@@ -1,29 +1,13 @@
 import { useEffect, useState } from 'react';
-import { addToQueue, getGameDetails } from '../services/api';
+import { addToQueue } from '../services/api';
 
 export function GamesList({ games, processedIds = [], folder }) {
   const [enriched, setEnriched] = useState([]);
 
   useEffect(() => {
+    // Just use the games as-is - ratings are already in the index
     setEnriched(games || []);
-    // Fetch details for first 10 games in background
-    const toFetch = (games || []).slice(0, 10);
-    toFetch.forEach(async (g, i) => {
-      try {
-        const details = await getGameDetails(g.game_id || g.id || '', folder);
-        setEnriched(prev => {
-          const copy = prev.slice();
-          const idx = copy.findIndex(x => (x.game_id || x.id) === (g.game_id || g.id));
-          if (idx !== -1) {
-            copy[idx] = { ...copy[idx], ...details };
-          }
-          return copy;
-        });
-      } catch (e) {
-        // ignore
-      }
-    });
-  }, [games, folder]);
+  }, [games]);
 
   const handleAddToQueue = async (game) => {
     try {
@@ -87,10 +71,10 @@ export function GamesList({ games, processedIds = [], folder }) {
                   <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{size}</td>
                   <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{ext}</td>
                   <td className="py-3 px-4">
-                    {game.popularity && game.popularity.rounded_score ? (
-                      <span className="text-yellow-500">{Array.from({length: game.popularity.rounded_score}).map((_,i)=>'★').join('')}</span>
+                    {game.rating != null ? (
+                      <span className="text-yellow-500 dark:text-yellow-400">{game.rating.toFixed(1)}</span>
                     ) : (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-gray-400 dark:text-gray-500">—</span>
                     )}
                   </td>
                   <td className="py-3 px-4 text-center">

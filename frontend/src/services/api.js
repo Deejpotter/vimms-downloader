@@ -148,3 +148,25 @@ export async function clearQueue() {
   if (!res.ok) throw new Error(`Failed to clear queue: ${res.statusText}`);
   return res.json();
 }
+
+/**
+ * Initialize workspace (alternative to build)
+ */
+export async function initWorkspace(workspaceRoot) {
+  const res = await fetch(`${API_BASE}/init`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workspace_root: workspaceRoot })
+  });
+  if (!res.ok) throw new Error(`Failed to init workspace: ${res.statusText}`);
+  return res.json();
+}
+
+/**
+ * Get available sections list
+ */
+export async function getSections() {
+  const res = await fetch(`${API_BASE}/sections`);
+  if (!res.ok) throw new Error(`Failed to get sections: ${res.statusText}`);
+  return res.json();
+}

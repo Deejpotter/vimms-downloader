@@ -43,7 +43,10 @@ def parse_game_details(html_content: str) -> Dict[str, any]:
     return details
 
 def parse_games_from_section(html_content: str, section: str) -> List[Dict[str, str]]:
-    """Parse a list of games from the HTML of a section page."""
+    """Parse a list of games from the HTML of a section page.
+    
+    Extracts: name, game_id, page_url, section, and rating (if available in table).
+    """
     games = []
     soup = BeautifulSoup(html_content, 'html.parser')
     table = soup.find('table', {'class': 'rounded centered cellpadding1 hovertable striped'})
@@ -52,25 +55,52 @@ def parse_games_from_section(html_content: str, section: str) -> List[Dict[str, 
 
     rows = table.find_all('tr')
     for row in rows:
-        first_td = row.find('td')
-        if first_td:
-            link = first_td.find('a')
-            if link:
-                name = link.text.strip()
-                href = link.get('href')
-                if not href:
-                    continue
-                if isinstance(href, (list, tuple)):
-                    href = href[0]
-                href = str(href)
-                game_id = href.split('/')[-1]
-                page_url = BASE_URL + href
-                games.append({
-                    'name': name,
-                    'page_url': page_url,
-                    'game_id': game_id,
-                    'section': section
-                })
+        cells = row.find_all('td')
+        if not cells:
+            continue
+            
+        # First cell has the game link
+        first_td = cells[0]
+        link = first_td.find('a')
+        if not link:
+            continue
+            
+        name = link.text.strip()
+        href = link.get('href')
+        if not href:
+            continue
+        if isinstance(href, (list, tuple)):
+            href = href[0]
+        href = str(href)
+        game_id = href.split('/')[-1]
+        page_url = BASE_URL + href
+        
+        # Extract rating from the Rating column (usually last or second-to-last cell)
+        # Vimm's section pages have columns: Title, Region, Version, Languages, Rating
+        rating = None
+        if len(cells) >= 5:  # Has rating column
+            rating_cell = cells[4]  # Rating is typically the 5th column (index 4)
+            rating_text = rating_cell.text.strip()
+            # Rating can be a number like "8.4" or "none"
+            if rating_text and rating_text.lower() not in ['none', '-', '—', '']:
+                try:
+                    rating = float(rating_text)
+                except (ValueError, TypeError):
+                    pass  # Invalid rating, leave as None
+        
+        game_dict = {
+            'name': name,
+            'page_url': page_url,
+            'game_id': game_id,
+            'section': section
+        }
+        
+        if rating is not None:
+            game_dict['rating'] = rating
+            
+        games.append(game_dict)
+        
+    return games
     return games
 
 def resolve_download_form(html_content: str, session: requests.Session, game_page_url: str, game_id: str, logger) -> Optional[str]:

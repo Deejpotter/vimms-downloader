@@ -1,110 +1,199 @@
 {
   "_comment": "Top-level configuration for the Vimm runner and downloader. Use the 'folders' mapping to control per-folder behavior.",
+  "defaults": {
+    "_comment": "Global defaults applied when CLI or per-folder settings do not override them.",
+    "auto_confirm_delete": false,
+    "delete_duplicates": false,
+    "detect_existing": true,
+    "extract_files": null,
+    "pre_scan": true,
+    "section_priority": [
+      "L",
+      "M",
+      "K",
+      "O"
+    ]
+  },
   "folders": {
-    "_comment": "Per-folder mapping: keys are folder names in the workspace. Use 'active':false to skip a folder.",
     "DS": {
       "_comment": "Nintendo DS folder: DS uses extraction by default in this workspace.",
       "active": true,
       "extract_files": true,
       "priority": 1
     },
-    "Dreamcast": {
-      "_comment": "Dreamcast (Sega) console folder — active",
-      "active": true,
-      "priority": 6
-    },
-    "GB": {
-      "_comment": "Game Boy (GB) folder — active.",
-      "active": true,
-      "priority": 10
-    },
     "GBA": {
-      "_comment": "Game Boy Advance (GBA) folder — active.",
+      "_comment": "Game Boy Advance (GBA) folder \u2014 active.",
       "active": true,
       "priority": 2
     },
-    "GBC": {
-      "_comment": "Game Boy Color (GBC) folder — active.",
-      "active": true,
-      "priority": 4
-    },
-    "GC": {
-      "_comment": "GameCube (GC) folder — active.",
-      "active": true
-    },
-    "Genesis": {
-      "_comment": "Sega Genesis / Mega Drive folder — active.",
-      "active": true,
-      "priority": 8
-    },
     "N64": {
-      "_comment": "Nintendo 64 (N64) folder — active.",
+      "_comment": "Nintendo 64 (N64) folder \u2014 active.",
       "active": true,
       "priority": 3
     },
-    "NES": {
-      "_comment": "Nintendo Entertainment System (NES) folder — active.",
+    "GBC": {
+      "_comment": "Game Boy Color (GBC) folder \u2014 active.",
+      "active": true,
+      "priority": 4
+    },
+    "SNES": {
+      "_comment": "Super Nintendo (SNES) folder \u2014 active.",
+      "active": true,
+      "priority": 5
+    },
+    "GB": {
+      "_comment": "Game Boy (GB) folder \u2014 active.",
       "active": true,
       "priority": 6
     },
-    "PS1": {
-      "_comment": "PlayStation 1 (PS1) folder — active.",
-      "active": false,
-      "priority": 5
+    "NES": {
+      "_comment": "Nintendo Entertainment System (NES) folder \u2014 active.",
+      "active": true,
+      "priority": 7
     },
-    "PS2": {
-      "_comment": "PlayStation 2 (PS2) folder — active.",
-      "active": false
+    "PS1": {
+      "_comment": "PlayStation 1 (PS1) folder \u2014 active.",
+      "active": true,
+      "priority": 8
     },
     "PSP": {
-      "_comment": "PlayStation Portable (PSP) folder — active.",
-      "active": false
+      "_comment": "PlayStation Portable (PSP) folder \u2014 active.",
+      "active": true,
+      "priority": 9
     },
-    "Saturn": {
-      "_comment": "Sega Saturn folder — active.",
+    "GC": {
+      "_comment": "GameCube (GC) folder \u2014 active.",
+      "active": true,
+      "priority": 10
+    },
+    "PS2": {
+      "_comment": "PlayStation 2 (PS2) folder \u2014 active.",
       "active": true,
       "priority": 11
     },
-    "SNES": {
-      "_comment": "Super Nintendo (SNES) folder — active.",
+    "Atari5200": {
+      "_comment": "Atari 5200 folder \u2014 active.",
       "active": true,
-      "priority": 5
+      "priority": 12
+    },
+    "Dreamcast": {
+      "_comment": "Dreamcast (Sega) console folder \u2014 active",
+      "active": true,
+      "priority": 13
+    },
+    "Genesis": {
+      "_comment": "Sega Genesis / Mega Drive folder \u2014 active.",
+      "active": true,
+      "priority": 14
+    },
+    "Saturn": {
+      "_comment": "Sega Saturn folder \u2014 active.",
+      "active": true,
+      "priority": 15
     },
     "Wii": {
-      "_comment": "Nintendo Wii folder — active.",
-      "active": false
+      "_comment": "Nintendo Wii folder \u2014 active.",
+      "active": true,
+      "priority": 16
+    },
+    "3DS": {
+      "_comment": "Nintendo 3DS folder \u2014 active.",
+      "active": true,
+      "priority": 17
+    },
+    "Atari2600": {
+      "_comment": "Atari 2600 folder \u2014 active.",
+      "active": true,
+      "priority": 18
+    },
+    "Xbox": {
+      "_comment": "Xbox folder \u2014 active.",
+      "active": true,
+      "priority": 19
+    },
+    "Atari7800": {
+      "_comment": "Atari 7800 folder \u2014 active.",
+      "active": true,
+      "priority": 20
+    },
+    "CDi": {
+      "_comment": "CD-i folder \u2014 active.",
+      "active": true,
+      "priority": 21
+    },
+    "GameGear": {
+      "_comment": "Sega Game Gear folder \u2014 active.",
+      "active": true,
+      "priority": 22
+    },
+    "Jaguar": {
+      "_comment": "Atari Jaguar folder \u2014 active.\",\n      \"active\": true,\n      \"priority\": 26\n    },\n    \"JaguarCD\": {\n      \"_comment\": \"Atari Jaguar CD folder \u2014 active.",
+      "active": true,
+      "priority": 23
+    },
+    "Lynx": {
+      "_comment": "Atari Lynx folder \u2014 active.",
+      "active": true,
+      "priority": 24
+    },
+    "Sega32X": {
+      "_comment": "Sega 32X folder \u2014 active.",
+      "active": true,
+      "priority": 25
+    },
+    "SegaCD": {
+      "_comment": "Sega CD folder \u2014 active.",
+      "active": true,
+      "priority": 26
+    },
+    "SMS": {
+      "_comment": "Sega Master System folder \u2014 active.",
+      "active": true,
+      "priority": 27
+    },
+    "TurboGrafx16": {
+      "_comment": "TurboGrafx-16 folder \u2014 active.",
+      "active": true,
+      "priority": 28
+    },
+    "TurboGrafxCD": {
+      "_comment": "TurboGrafx-CD folder \u2014 active.",
+      "active": true,
+      "priority": 29
+    },
+    "VirtualBoy": {
+      "_comment": "Nintendo Virtual Boy folder \u2014 active.",
+      "active": true,
+      "priority": 30
+    },
+    "WiiWare": {
+      "_comment": "WiiWare folder \u2014 active.",
+      "active": true,
+      "priority": 31
+    },
+    "Xbox360": {
+      "_comment": "Xbox 360 folder \u2014 active.",
+      "active": true,
+      "priority": 32
     }
-  },
-  "defaults": {
-    "_comment": "Global defaults applied when CLI or per-folder settings do not override them.",
-    "detect_existing": true,
-    "pre_scan": true,
-    "extract_files": null,
-    "section_priority": [
-      "L",
-      "M",
-      "K",
-      "O"
-    ],
-    "delete_duplicates": false,
-    "auto_confirm_delete": false
   },
   "limits": {
     "_comment": "Tuning limits for local indexing and fuzzy matching.",
     "index_max_files": 20000,
-    "match_threshold": 0.75
+    "match_threshold": 0.65
   },
   "network": {
     "_comment": "Network and retry tuning: delays are [min, max] in seconds.",
-    "delay_between_page_requests": [
-      1,
-      2
-    ],
     "delay_between_downloads": [
       1,
       2
     ],
-    "retry_delay": 5,
-    "max_retries": 3
-  }
+    "delay_between_page_requests": [
+      1,
+      2
+    ],
+    "max_retries": 3,
+    "retry_delay": 5
+  },
+  "workspace_root": "H:\\Games"
 }

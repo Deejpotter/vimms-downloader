@@ -2,13 +2,59 @@
 
 This file tracks the work planned and completed for this repository. Keep the most recent 10 completed items.
 
-- [ ] (In Progress) **Split index building into separate remote catalog fetch and local file scan** — 2026-01-26
+- [ ] (In Progress) **Extract game details during index build (rating/size/extension from section & game pages)** — 2026-01-26
+  - **Step 1: Extract rating from section page HTML (already fetched)**
+    - [x] 1.1: Update `parse_games_from_section()` to extract rating from table (DONE - extracts from cell 4)
+    - [x] 1.2: Return rating in game dict: `{'name': ..., 'rating': 8.4}` (DONE - conditionally added)
+    - [x] 1.3: Add test fixture with real section HTML (DONE - tests/test_rating_extraction.py created)
+    - [x] 1.4: Store rating in index during build (DONE - both full & fast builds preserve rating)
+    - [x] 1.5: Update frontend to display cached rating (DONE - GamesList shows rating directly)
+    - [x] 1.6: Remove on-demand fetching from GamesList (DONE - removed getGameDetails calls)
+    - [x] 1.7: Rebuild frontend (DONE - yarn build completed)
+    - [ ] 1.8: **TESTING NEEDED** - Verify ratings appear after next index build completes
+  - **Step 2: Optionally fetch game page details (config flag)**
+    - [ ] 2.1: Add config `index.fetch_full_details: false` (default off)
+    - [ ] 2.2: Parse game page table (cart size, download size, overall rating)
+    - [ ] 2.3: Extract file extension from canvas data-v (base64 filename)
+    - [ ] 2.4: Create `parse_game_page_details(html)` helper
+    - [ ] 2.5: Only fetch when config enabled (avoid slow builds)
+  - **Step 3: Update index schema**
+    - [ ] 3.1: Expand game dict: `{'rating': 8.4, 'size_mb': 64, 'extension': '.nds'}`
+    - [ ] 3.2: Store in `api_index_build_internal()`
+    - [ ] 3.3: Ensure backward compatibility
+  - **Step 4: Remove on-demand fetching**
+    - [ ] 4.1: Remove `getGameDetails()` from GamesList useEffect
+    - [ ] 4.2: Display cached rating/size/extension
+    - [ ] 4.3: Show "-" for missing fields
+    - [ ] 4.4: Keep `/api/game` for download URL only
+
+- [x] (Completed) **Add per-console completion tracking + Fix game data display (size/format/rating)** — 2026-01-26
+  - **Step 1: Write tests for current functionality**
+    - [x] 1.1: Test per-console completion tracking (skip completed consoles on resume)
+    - [x] 1.2: Test partial index loading when workspace matches
+    - [x] 1.3: Test fresh index creation when workspace differs
+    - [x] 1.4: Test that old incomplete entries are replaced
+    - [x] 1.5: Test present status preservation in GamesList (mock API + details merge)
+    - [x] 1.6: Test checkmark rendering with present=true
+    - [x] 1.7: Integration test - all 8 tests passing ✅
+  - **Step 2: Fix game data display**
+    - [x] 2.1: Verified `/api/game` returns size_bytes, extension, popularity.score
+    - [x] 2.2: Verified GamesList already uses these fields correctly
+    - [x] 2.3: Changed rating display from stars to raw score (e.g., "4.5/5")
+    - [x] 2.4: Rebuilt frontend successfully
+  - **Completed:**
+    - [x] Added per-console `complete: true` flag and resume logic (both full & fast builds)
+    - [x] Fixed GamesList to preserve `present` status when merging details
+    - [x] Added debug logging to `/api/section` endpoint
+    - [x] All 8 unit tests passing
+    - [x] Rating now displays as "4.5/5" instead of stars
+
+- [x] (Completed) **Split index building into separate remote catalog fetch and local file scan** — 2026-01-26
   - Phase 1: Create remote catalog cache endpoint (fetch once from Vimm's Lair) — ✅ DONE (tested)
   - Phase 2: Fast local scan endpoint (uses cached catalog + scans local files) — ✅ DONE (ready to test)
   - Phase 3: Update frontend to use separate operations — ✅ DONE (Settings menu + progress UI)
   - Phase 4: Add "Refresh Remote Catalog" button for manual updates — ✅ DONE (deployed)
   - **BUGFIX**: Fixed CONSOLE_MAP to use correct Vimm system codes (GG not GameGear, 32X not Sega32X, etc.)
-  - **Current**: Restarting catalog build with corrected system codes
 
 - [x] (Completed) Add `.github/copilot-instructions.md` to document repo-specific guidance for AI agents — 2026-01-24
 - [x] (Completed) Add unit tests for `_clean_filename` and `_normalize_for_match` (small cases, edge cases) — 2026-01-24
