@@ -324,7 +324,7 @@ class VimmsDownloader:
                 try:
                     import py7zr  # type: ignore
                 except Exception:
-                    print(f"    ⚠️  Skipping extraction (.7z) — 'py7zr' not installed. Keep archive or install py7zr to enable extraction.")
+                    print(f"    WARNING: Skipping extraction (.7z) — 'py7zr' not installed. Keep archive or install py7zr to enable extraction.")
                     return
                 with py7zr.SevenZipFile(archive_path, mode='r') as z:
                     z.extractall(path=self.download_dir)
@@ -333,20 +333,20 @@ class VimmsDownloader:
                     except Exception:
                         extracted_files = []
             else:
-                print(f"    ⚠️  Skipping extraction (not a ZIP file)")
+                print(f"    WARNING: Skipping extraction (not a ZIP file)")
                 return
             
-            print(f"  ✓ Extracted {len(extracted_files)} file(s)")
+            print(f"  Extracted {len(extracted_files)} file(s)")
             
             # Delete the archive
             archive_path.unlink()
-            print(f"  🗑️  Deleted archive: {archive_path.name}")
+            print(f"  Deleted archive: {archive_path.name}")
             
             # Find and delete "Vimm's Lair.txt" if it exists
             vimms_txt = self.download_dir / "Vimm's Lair.txt"
             if vimms_txt.exists():
                 vimms_txt.unlink()
-                print(f"  🗑️  Deleted: Vimm's Lair.txt")
+                print(f"  Deleted: Vimm's Lair.txt")
             
             # Find and clean up any single-file folders
             # (e.g., if extracted into a folder with just the ROM file)
@@ -377,7 +377,7 @@ class VimmsDownloader:
                         # Delete the now-empty (or nearly empty) folder
                         try:
                             shutil.rmtree(item)
-                            print(f"  🗑️  Deleted folder: {item.name}")
+                            print(f"  Deleted folder: {item.name}")
                         except:
                             # Folder might not be empty, that's okay
                             pass
@@ -391,12 +391,12 @@ class VimmsDownloader:
                         new_path = self.download_dir / cleaned_name
                         if not new_path.exists():
                             item.rename(new_path)
-                            print(f"  ✨ Cleaned filename: {item.name} → {cleaned_name}")
+                            print(f"  Cleaned filename: {item.name} -> {cleaned_name}")
             
         except zipfile.BadZipFile:
-            print(f"  ⚠️  Archive appears corrupted, keeping file for manual inspection")
+            print(f"  WARNING: Archive appears corrupted, keeping file for manual inspection")
         except Exception as e:
-            print(f"  ⚠️  Extraction error: {e}")
+            print(f"  WARNING: Extraction error: {e}")
             print(f"     Keeping archive for manual extraction")
     
     def get_game_list_from_section(self, section: str) -> List[Dict[str, str]]:
@@ -430,7 +430,7 @@ class VimmsDownloader:
                 if not next_link:
                     break
 
-                print(f"  ✓ Page {page_num}: Found {len(games_on_page)} games")
+                print(f"  Page {page_num}: Found {len(games_on_page)} games")
                 page_num += 1
                 self._random_delay(self.delay_between_page_requests)
                 
@@ -438,13 +438,13 @@ class VimmsDownloader:
                 # 404 on page 2+ is expected when section has only 1 page
                 if page_num > 1 and '404' in str(e):
                     break
-                print(f"  ✗ Error fetching section '{section}' page {page_num}: {e}")
+                print(f"  ERROR: Error fetching section '{section}' page {page_num}: {e}")
                 break
             except Exception as e:
-                print(f"  ✗ Error fetching section '{section}' page {page_num}: {e}")
+                print(f"  ERROR: Error fetching section '{section}' page {page_num}: {e}")
                 break
         
-        print(f"  ✓ Total: Found {len(games)} games in section '{section}'")
+        print(f"  Total: Found {len(games)} games in section '{section}'")
         
         return games
 
@@ -684,12 +684,12 @@ class VimmsDownloader:
             if getattr(self, 'logger', None):
                 self.logger.info(f"Categorized {filepath} -> {target} (score={score}, votes={votes})")
             else:
-                print(f"  ➤ Categorized: {filepath.name} -> {label}/")
+                print(f"  Categorized: {filepath.name} -> {label}/")
         except Exception as e:
             if getattr(self, 'logger', None):
                 self.logger.exception(f"Could not move file to stars folder: {e}")
             else:
-                print(f"  ✗ Could not categorize file: {e}")
+                print(f"  ERROR: Could not categorize file: {e}")
 
         # Close and remove logger handlers for this downloader instance to avoid leaving
         # the log file locked (important for tests that use temporary directories).
@@ -729,7 +729,7 @@ class VimmsDownloader:
             
         except Exception as e:
             msg = f"Error getting download URL: {e}"
-            print(f"    ✗ {msg}")
+            print(f"    ERROR: {msg}")
             if getattr(self, 'logger', None):
                 self.logger.exception(msg)
             return None
@@ -782,10 +782,10 @@ class VimmsDownloader:
         if game_id in self.progress['completed']:
             matches = self.find_all_matching_files(game_name)
             if matches:
-                print(f"  ⏭️  Skipping '{game_name}' (already downloaded)")
+                print(f"  SKIP: Skipping '{game_name}' (already downloaded)")
                 return True  # Return True but mark as "skipped" so we don't delay
             else:
-                print(f"  ⚠️  Previously recorded as downloaded but no local file present; will re-download '{game_name}'")
+                print(f"  WARNING: Previously recorded as downloaded but no local file present; will re-download '{game_name}'")
                 try:
                     self.progress['completed'].remove(game_id)
                 except ValueError:
@@ -800,7 +800,7 @@ class VimmsDownloader:
         download_url = self.get_download_url(game['page_url'], game_id)
         
         if not download_url:
-            print(f"  ✗ Failed to get download URL")
+            print(f"  ERROR: Failed to get download URL")
             self.progress['failed'].append({
                 'game_id': game_id,
                 'name': game_name,
@@ -824,7 +824,7 @@ class VimmsDownloader:
                     'Sec-Fetch-Mode': 'navigate'
                 }
                 
-                print(f"  ⬇️  Downloading (attempt {attempt}/{self.max_retries})...")
+                print(f"  Downloading (attempt {attempt}/{self.max_retries})...")
                 
                 response = self.session.get(
                     download_url,
@@ -835,7 +835,7 @@ class VimmsDownloader:
                 )
                 
                 if response.status_code != 200:
-                    print(f"    ⚠️  HTTP {response.status_code}")
+                    print(f"    WARNING: HTTP {response.status_code}")
                     print(f"    Response headers: {dict(response.headers)}")
                     if getattr(self, 'logger', None):
                         self.logger.warning(f"HTTP {response.status_code} for {game_name} ({game_id}) on attempt {attempt} URL={download_url}")
@@ -976,7 +976,7 @@ class VimmsDownloader:
                     raise Exception("Downloaded file is empty or missing")
                 
                 file_size_mb = filepath.stat().st_size / (1024 * 1024)
-                print(f"  ✅ Downloaded successfully: {filename} ({file_size_mb:.2f} MB)")
+                print(f"  Downloaded successfully: {filename} ({file_size_mb:.2f} MB)")
                 
                 # Either extract & cleanup, or keep the archive for systems that support
                 # playing zipped ROMs (e.g., GBA). When keeping archives we do not
@@ -985,9 +985,9 @@ class VimmsDownloader:
                     # Report cleaned archive name if needed
                     if filepath.exists():
                         file_size_mb = filepath.stat().st_size / (1024 * 1024)
-                        print(f"  ✅ Saved archive: {filepath.name} ({file_size_mb:.2f} MB)")
+                        print(f"  Saved archive: {filepath.name} ({file_size_mb:.2f} MB)")
                     else:
-                        print(f"  ✅ Saved archive: {filename}")
+                        print(f"  Saved archive: {filename}")
                 else:
                     # Extract the archive (original behavior)
                     self._extract_and_cleanup(filepath)
@@ -1011,7 +1011,7 @@ class VimmsDownloader:
                 
             except Exception as e:
                 msg = f"Download failed for {game_name} ({game_id}): {e}"
-                print(f"    ✗ {msg}")
+                print(f"    ERROR: {msg}")
                 if getattr(self, 'logger', None):
                     self.logger.exception(msg)
 
@@ -1027,7 +1027,7 @@ class VimmsDownloader:
                     pass
 
                 if attempt < self.max_retries:
-                    print(f"    ⏳ Waiting {self.retry_delay}s before retry...")
+                    print(f"    Waiting {self.retry_delay}s before retry...")
                     time.sleep(self.retry_delay)
                 else:
                     # Final failure
@@ -1052,7 +1052,7 @@ class VimmsDownloader:
         print(f"Progress file: {self.progress_file}")
         print(f"Previously downloaded: {len(self.progress['completed'])} games")
         print(f"Previously failed: {len(self.progress['failed'])} games")
-        print("\n⚠️  IMPORTANT: This script respects Vimm's rate limits.")
+        print("\nWARNING: IMPORTANT: This script respects Vimm's rate limits.")
         print("   Downloads are throttled to one at a time with delays.")
         print("   This process will take a long time. You can stop and resume anytime.")
         print("\n" + "=" * 80)
@@ -1074,10 +1074,10 @@ class VimmsDownloader:
             self._build_local_index()
             if self.local_index is not None:
                 count_files = sum(len(v) for v in self.local_index.values())
-                print(f"\n  ✓ Pre-scanned local files: {count_files} ROM(s) indexed for quick matching")
+                print(f"\n  Pre-scanned local files: {count_files} ROM(s) indexed for quick matching")
                 # Inform user when extraction is disabled (we will keep archives)
                 if not self.extract_files:
-                    print(f"  ⚠️  extract_files is disabled: .zip archives will be retained and not extracted")
+                    print(f"  WARNING: extract_files is disabled: .zip archives will be retained and not extracted")
                 
                 # Rebuild progress['completed'] based on actual filesystem state
                 print(f"  🔄 Rebuilding progress list based on actual files...")
@@ -1086,7 +1086,7 @@ class VimmsDownloader:
                 self._save_progress()
                 removed = len(old_completed) - len(self.progress['completed'])
                 if removed > 0:
-                    print(f"  ✓ Cleared {removed} stale entries from progress")
+                    print(f"  Cleared {removed} stale entries from progress")
         
         # Determine section order. If an override was provided (either via the
         # downloader constructor or CLI), use that ordering first and then append
@@ -1150,7 +1150,7 @@ class VimmsDownloader:
                 # If we finished the loop without breaking, all titles were present locally
                 # and we can skip the entire section
                 else:
-                    print(f"  ⏭️  All {len(games)} titles in section '{section}' appear present locally — skipping section")
+                    print(f"  SKIP: All {len(games)} titles in section '{section}' appear present locally — skipping section")
                     # Update last_section and continue
                     self.progress['last_section'] = section
                     self._save_progress()
@@ -1177,7 +1177,7 @@ class VimmsDownloader:
                             # Single match or no-deletion path: pick the first match
                             found_local = matches[0]
 
-                        print(f"  ⏭️  Skipping '{game['name']}' (local file found: {found_local.name})")
+                        print(f"  SKIP: Skipping '{game['name']}' (local file found: {found_local.name})")
                         if game['game_id'] not in self.progress['completed']:
                             self.progress['completed'].append(game['game_id'])
                             self._save_progress()
@@ -1207,7 +1207,7 @@ class VimmsDownloader:
             # Delay between sections
             if section_idx < len(SECTIONS) - 1:
                 delay = random.uniform(self.delay_between_page_requests[0], self.delay_between_page_requests[1])
-                print(f"\n⏸️  Section complete. Waiting {delay:.0f}s before next section...")
+                print(f"\nPAUSE: Section complete. Waiting {delay:.0f}s before next section...")
                 time.sleep(delay)
         
         # Final summary
@@ -1226,7 +1226,7 @@ class VimmsDownloader:
         print(f"Progress saved to: {self.progress_file}")
         
         if self.progress['failed']:
-            print(f"\n⚠️  {len(self.progress['failed'])} games failed to download.")
+            print(f"\nWARNING: {len(self.progress['failed'])} games failed to download.")
             print("   Check the progress file for details.")
 
 
@@ -1288,7 +1288,7 @@ def main():
     
     if not console:
         print("=" * 80)
-        print("⚠️  Could not auto-detect console from folder name!")
+        print("WARNING: Could not auto-detect console from folder name!")
         print("=" * 80)
         print(f"\nCurrent folder: {script_dir.name}")
         print("\nSupported console folder names:")
@@ -1349,10 +1349,10 @@ def main():
         # Otherwise run non-interactively (default behavior).
         downloader.download_all_games()
     except KeyboardInterrupt:
-        print("\n\n⏸️  Download interrupted by user.")
+        print("\n\nPAUSE: Download interrupted by user.")
         print("   Progress has been saved. Run the script again to resume.")
     except Exception as e:
-        print(f"\n\n❌ Unexpected error: {e}")
+        print(f"\n\nERROR: Unexpected error: {e}")
         print("   Progress has been saved. Run the script again to resume.")
 
 

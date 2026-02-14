@@ -70,17 +70,17 @@ def rename_files(directory, changes, dry_run=True):
         
         # Check if target file already exists
         if os.path.exists(new_path) and old_path != new_path:
-            print(f"  ⚠️  SKIP: '{new_name}' already exists")
+            print(f"  WARNING: SKIP: '{new_name}' already exists")
             error_count += 1
             continue
         
         if not dry_run:
             try:
                 os.rename(old_path, new_path)
-                print(f"  ✓ Renamed: '{old_name}' → '{new_name}'")
+                print(f"  Renamed: '{old_name}' -> '{new_name}'")
                 success_count += 1
             except Exception as e:
-                print(f"  ✗ ERROR: Could not rename '{old_name}': {e}")
+                print(f"  ERROR: Could not rename '{old_name}': {e}")
                 error_count += 1
         else:
             print(f"  • '{old_name}' → '{new_name}'")
@@ -127,7 +127,7 @@ def main():
         print(f"\n{'=' * 70}")
         print(f"Complete! Successfully renamed {success} file(s).")
         if errors > 0:
-            print(f"⚠️  {errors} file(s) could not be renamed (see errors above).")
+            print(f"WARNING: {errors} file(s) could not be renamed (see errors above).")
         print(f"{'=' * 70}")
     else:
         print("\nOperation cancelled. No files were renamed.")
