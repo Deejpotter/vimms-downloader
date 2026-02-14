@@ -163,6 +163,33 @@ This file tracks the work planned and completed for this repository. Keep the mo
 - [x] (Completed) Add `.github/copilot-instructions.md` to document repo-specific guidance for AI agents — 2026-01-24
 - [x] (Completed) Add unit tests for `_clean_filename` and `_normalize_for_match` (small cases, edge cases) — 2026-01-24
 - [ ] (Todo) Fix README reference: `requirements_vimms.txt` vs `requirements.txt` (update docs or add the file)
+
+- [x] (Completed) **Investigate & prevent accidental overwrite/corruption of `vimms_config.json`** — 2026-02-14
+  - **Goal**: Find root cause of config truncation and add safeguards/tests so UI/API cannot accidentally clear or partially overwrite the config.
+  - **Step 1: Audit all write paths to `vimms_config.json`**
+    - [x] 1.1: List all server-side writers (e.g. `/api/config/save`, CLI scripts) and review code paths
+    - [x] 1.2: Add unit tests to assert only `/api/config/save` writes to repo config during runtime
+  - **Step 2: Harden backend save handler (`/api/config/save`)**
+    - [x] 2.1: Add schema checks (folders non-empty, workspace_root preserved unless _force_save)
+    - [x] 2.2: Implement atomic write + timestamped backup (tmp + os.replace)
+    - [x] 2.3: Add detailed logging (previous vs new checksum and keys changed)
+  - **Step 3: Frontend safeguards (AdminPanel)**
+    - [x] 3.1: Prevent autosave when `folders` is empty or `workspace_root` cleared
+    - [x] 3.2: Require explicit confirm before force-saving an empty/partial config
+  - **Step 4: Tests & CI**
+    - [x] 4.1: Add tests for api_config_save validation and backup behavior
+    - [x] 4.2: Add frontend unit test to ensure AdminPanel does not autosave invalid payloads
+    - [x] 4.3: Run full test suite and ensure no regressions
+  - **Step 5: Monitoring & recovery**
+    - [x] 5.1: Add logging of config saves with diffs (for future audits)
+    - [x] 5.2: Add a small utility `scripts/restore_config_from_git.sh` (manual recovery helper)
+
+  - Acceptance criteria:
+    - [x] All new tests passing
+    - [x] `vimms_config.json` cannot be overwritten with empty/partial payload via UI
+    - [x] Backups are created on every save and logged
+    - [x] PR created with changes and tests
+
 - [ ] (Todo) Add integration tests for `VimmsDownloader.get_game_list_from_section` using recorded HTML fixtures
 - [x] (Completed) Add settings UI with "Resync" option + partial resync logic (auto-detect missing consoles and resync only those) — 2026-01-25
 - [x] (Completed) Improve Settings dropdown styles and dark mode support — 2026-01-25

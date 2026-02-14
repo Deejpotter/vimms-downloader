@@ -125,5 +125,78 @@ def test_endpoints_return_json_content_type(client):
                           content_type='application/json')
     assert 'application/json' in response.content_type
 
+
+def test_save_config_rejects_workspace_root_removal(client):
+    """Ensure the API rejects attempts to remove workspace_root unless forced."""
+    # Load current config; skip if not present
+    res = client.get('/api/config')
+    if res.status_code != 200:
+        pytest.skip('No top-level config available')
+    orig = res.get_json()
+    if 'workspace_root' not in orig:
+        pytest.skip('No workspace_root to test removal against')
+
+    # Attempt to save config with workspace_root removed
+    bad_cfg = dict(orig)
+    bad_cfg.pop('workspace_root', None)
+    response = client.post('/api/config/save', data=json.dumps(bad_cfg), content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert 'workspace_root' in data.get('error', '')
+
+
+def test_save_creates_timestamped_backup_and_atomic_replace(client, tmp_path):
+    """Saving config should create a timestamped backup and atomically replace the file."""
+    cfg_file = Path(__file__).resolve().parent.parent / 'vimms_config.json'
+    if not cfg_file.exists():
+        pytest.skip('Top-level vimms_config.json not present')
+
+    # Read original and prepare modified copy
+    orig_text = cfg_file.read_text(encoding='utf-8')
+    orig = json.loads(orig_text)
+    modified = dict(orig)
+    # Toggle a boolean default (safe change)
+    md = modified.get('defaults', {})
+    md['detect_existing'] = not md.get('detect_existing', True)
+    modified['defaults'] = md
+
+    try:
+        start_files = set(p.name for p in cfg_file.parent.glob('vimms_config.*'))
+        response = client.post('/api/config/save', data=json.dumps(modified), content_type='application/json')
+        assert response.status_code == 200
+
+        # Verify a timestamped backup (.YYYYMMDDHHMMSS.bak) exists
+        new_files = set(p.name for p in cfg_file.parent.glob('vimms_config.*')) - start_files
+        bak_files = [n for n in new_files if n.endswith('.bak')]
+        assert len(bak_files) >= 1
+
+        # Ensure the saved file is valid JSON and equals our modified payload
+        saved = json.loads(cfg_file.read_text(encoding='utf-8'))
+        assert saved.get('defaults', {}).get('detect_existing') == md['detect_existing']
+
+        # No lingering temp files
+        tmp_matches = list(cfg_file.parent.glob('vimms_config.*.tmp'))
+        assert len(tmp_matches) == 0
+
+    finally:
+        # Restore original config
+        cfg_file.write_text(orig_text, encoding='utf-8')
+
+
+def test_save_rejects_empty_folders_by_default(client):
+    """Saving a config with empty folders should be rejected unless _force_save provided."""
+    payload = {'defaults': {'detect_existing': True}, 'folders': {}}
+    res = client.post('/api/config/save', data=json.dumps(payload), content_type='application/json')
+    assert res.status_code == 400
+    # Now force it - should succeed (but we won't keep the change)
+    payload['_force_save'] = True
+    cfg_file = Path(__file__).resolve().parent.parent / 'vimms_config.json'
+    orig = cfg_file.read_text(encoding='utf-8')
+    try:
+        res2 = client.post('/api/config/save', data=json.dumps(payload), content_type='application/json')
+        assert res2.status_code == 200
+    finally:
+        cfg_file.write_text(orig, encoding='utf-8')
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

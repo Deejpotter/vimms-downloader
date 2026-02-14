@@ -10,3 +10,19 @@ test('loads config on open and displays folders', async () => {
   const { getByText } = render(<AdminPanel open={true} onClose={onClose} />);
   await waitFor(()=> expect(getByText('DS')).toBeTruthy());
 });
+
+test('does not autosave when folders empty or workspace_root missing', async () => {
+  jest.useFakeTimers();
+  api.getConfig.mockResolvedValue({ workspace_root: '', folders: {} });
+  api.saveConfig.mockResolvedValue({ status: 'saved' });
+
+  const onClose = jest.fn();
+  render(<AdminPanel open={true} onClose={onClose} />);
+
+  // Advance timers beyond autosave delay
+  jest.advanceTimersByTime(4000);
+
+  // saveConfig should NOT have been called because folders are empty / no workspace
+  expect(api.saveConfig).not.toHaveBeenCalled();
+  jest.useRealTimers();
+});

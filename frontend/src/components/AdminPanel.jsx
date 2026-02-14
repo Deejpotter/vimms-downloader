@@ -20,9 +20,15 @@ export default function AdminPanel({ open, onClose }) {
     })();
   }, [open]);
 
-  // Auto-save config changes after delay, but skip during active drag
+  // Auto-save config changes after delay, but skip during active drag or when config is invalid
   useEffect(() => {
     if (!config || !open || draggedIndex !== null) return;
+
+    // Do not autosave if folders are empty or workspace_root is missing
+    const foldersEmpty = !config.folders || Object.keys(config.folders).length === 0;
+    const noWorkspace = !config.workspace_root || String(config.workspace_root).trim() === '';
+    if (foldersEmpty || noWorkspace) return;
+
     const timer = setTimeout(async () => {
       try {
         await saveConfig(config);
@@ -215,6 +221,20 @@ export default function AdminPanel({ open, onClose }) {
                   className="px-4 py-2 bg-gray-200 dark:bg-gray-600 dark:text-white rounded"
                 >
                   Copy JSON
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirm('Force save config (this may overwrite workspace_root or folders). Continue?')) return;
+                    try {
+                      await saveConfig({ ...config, _force_save: true });
+                      alert('Force-saved config');
+                    } catch (e) {
+                      alert('Force save failed: ' + e.message);
+                    }
+                  }}
+                  className="px-4 py-2 bg-red-500 text-white rounded"
+                >
+                  Force Save
                 </button>
               </div>
 

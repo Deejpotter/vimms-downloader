@@ -1453,39 +1453,91 @@ def api_config_default_folders():
 
 @app.route('/api/config/save', methods=['POST'])
 def api_config_save():
-    """Replace or update `vimms_config.json`. Expects full config payload (saves backup)."""
+    """Replace or update `vimms_config.json` with stronger validation and atomic save.
+
+    Expected payload: full config object. A `_force_save` boolean may be provided to
+    override strict checks (use with caution).
+    """
     try:
         data = request.get_json()
-        if data is None:
-            return jsonify({'error': 'invalid or missing JSON data'}), 400
-    except Exception as e:
+    except Exception:
         return jsonify({'error': 'malformed JSON'}), 400
-        
+
+    if not isinstance(data, dict):
+        return jsonify({'error': 'expected JSON object'}), 400
+
     cfg_path = Path(__file__).resolve().parent.parent / 'vimms_config.json'
-    # Prevent accidental overwrite of config with empty folders unless explicitly forced
+
+    # Basic validation: folders must be a non-empty dict unless _force_save is set
     force_flag = bool(data.get('_force_save', False))
     if (not isinstance(data.get('folders'), dict) or len(data.get('folders') or {}) == 0) and not force_flag:
         return jsonify({'error': 'folders missing or empty; use _force_save to override'}), 400
 
+    # Prevent accidental removal of workspace_root unless explicitly forced
     try:
-        # Backup existing config before saving
+        existing_cfg = None
         if cfg_path.exists():
-            bak = cfg_path.with_suffix('.json.bak')
-            import shutil
+            with open(cfg_path, 'r', encoding='utf-8') as f:
+                existing_cfg = json.load(f)
+        if existing_cfg and 'workspace_root' in existing_cfg:
+            if 'workspace_root' not in data or not data.get('workspace_root'):
+                if not force_flag:
+                    return jsonify({'error': 'workspace_root removal not allowed without _force_save'}), 400
+    except Exception as e:
+        logger.exception(f"api_config_save: failed to read existing config for validation: {e}")
+        return jsonify({'error': 'failed to validate against existing config'}), 500
+
+    # Normalize and validate folders structure
+    if 'folders' in data and isinstance(data['folders'], dict):
+        sanitized = {}
+        for k, v in data['folders'].items():
+            if not isinstance(k, str) or not isinstance(v, dict):
+                return jsonify({'error': 'invalid folders format'}), 400
+            # Ensure priority is int (default large) and active is boolean
+            sanitized[k] = {
+                'active': bool(v.get('active', True)),
+                'priority': int(v.get('priority', 999)),
+                **{kk: vv for kk, vv in v.items() if kk not in ('active', 'priority')}
+            }
+        # Sort by priority
+        data['folders'] = dict(sorted(sanitized.items(), key=lambda x: x[1].get('priority', 999)))
+
+    # Do atomic write: write to tmp file then replace
+    try:
+        import shutil, tempfile, os
+        # Create timestamped backup of existing config
+        if cfg_path.exists():
+            ts = datetime.now().strftime('%Y%m%d%H%M%S')
+            bak = cfg_path.with_suffix(f'.{ts}.bak')
             shutil.copy2(cfg_path, bak)
             logger.info(f'api_config_save: backed up config to {bak}')
-        
-        # Sort folders by priority before saving
-        if 'folders' in data and isinstance(data['folders'], dict):
-            data['folders'] = dict(sorted(
-                data['folders'].items(),
-                key=lambda x: x[1].get('priority', 999)
-            ))
-        
-        # Save new
-        with open(cfg_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
-        logger.info('api_config_save: saved vimms_config.json')
+
+        # Write to temp file in same directory then replace
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=str(cfg_path.parent), prefix='vimms_config.', suffix='.tmp')
+        try:
+            with os.fdopen(tmp_fd, 'w', encoding='utf-8') as tf:
+                json.dump(data, tf, indent=2)
+                tf.flush()
+                os.fsync(tf.fileno())
+            os.replace(tmp_path, cfg_path)
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+
+        # Log a small diff (keys added/removed/changed at top level)
+        try:
+            old_keys = set(existing_cfg.keys()) if existing_cfg else set()
+            new_keys = set(data.keys())
+            added = new_keys - old_keys
+            removed = old_keys - new_keys
+            changed = [k for k in new_keys & old_keys if existing_cfg and existing_cfg.get(k) != data.get(k)]
+            logger.info(f"api_config_save: saved vimms_config.json (added={list(added)}, removed={list(removed)}, changed={changed})")
+        except Exception:
+            logger.info('api_config_save: saved vimms_config.json (diff unavailable)')
+
         return jsonify({'status': 'saved'})
     except Exception as e:
         logger.exception(f"api_config_save: failed to save config: {e}")
