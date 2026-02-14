@@ -1527,8 +1527,12 @@ def api_config_save():
                 except Exception:
                     pass
 
-        # Log a small diff (keys added/removed/changed at top level)
+        # Log request context + a small diff (keys added/removed/changed at top level)
         try:
+            requester = request.remote_addr or 'local'
+            ua = request.headers.get('User-Agent', '')[:200]
+            logger.info(f"api_config_save: request from={requester} user_agent={ua} size={len(request.data or b'')} force={force_flag}")
+
             old_keys = set(existing_cfg.keys()) if existing_cfg else set()
             new_keys = set(data.keys())
             added = new_keys - old_keys

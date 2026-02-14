@@ -198,5 +198,33 @@ def test_save_rejects_empty_folders_by_default(client):
     finally:
         cfg_file.write_text(orig, encoding='utf-8')
 
+
+def test_save_rejects_invalid_folder_value_types(client):
+    """Reject folder entries whose values are not objects/dicts."""
+    payload = {'defaults': {'detect_existing': True}, 'folders': {'DS': 'not-a-dict'}}
+    res = client.post('/api/config/save', data=json.dumps(payload), content_type='application/json')
+    assert res.status_code == 400
+
+
+def test_save_allows_workspace_root_removal_with_force(client):
+    """Workspace root removal is only allowed when _force_save is provided."""
+    res = client.get('/api/config')
+    if res.status_code != 200:
+        pytest.skip('No top-level config present')
+    orig = res.get_json()
+    if 'workspace_root' not in orig:
+        pytest.skip('No workspace_root to test')
+
+    payload = dict(orig)
+    payload.pop('workspace_root', None)
+    payload['_force_save'] = True
+    cfg_file = Path(__file__).resolve().parent.parent / 'vimms_config.json'
+    backup = cfg_file.read_text(encoding='utf-8')
+    try:
+        r = client.post('/api/config/save', data=json.dumps(payload), content_type='application/json')
+        assert r.status_code == 200
+    finally:
+        cfg_file.write_text(backup, encoding='utf-8')
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
