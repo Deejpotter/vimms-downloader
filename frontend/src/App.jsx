@@ -8,6 +8,8 @@ import { ProcessedList } from './components/ProcessedList';
 import { useIndexBuilder } from './hooks/useIndexBuilder';
 import { getProcessed, getIndex, queueAll } from './services/api';
 import { getConfig } from './services/configApi';
+import SettingsMenu from './components/SettingsMenu';
+import AdminPanel from './components/AdminPanel';
 
 function App() {
   const { progress, consoles, isBuilding, isIncomplete, startBuild } = useIndexBuilder();
@@ -16,6 +18,7 @@ function App() {
   const [processedIds, setProcessedIds] = useState([]);
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [hasWorkspace, setHasWorkspace] = useState(false);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
 
   // Load workspace from localStorage or config on mount
   useEffect(() => {
@@ -58,6 +61,13 @@ function App() {
       setSelectedConsole(consoles[0]);
     }
   }, [consoles, selectedConsole]);
+
+  // Listen for UI events to open admin modal
+  useEffect(() => {
+    const handler = () => setIsAdminOpen(true);
+    window.addEventListener('open-admin', handler);
+    return () => window.removeEventListener('open-admin', handler);
+  }, []);
 
   // Fetch processed downloads for checkmarks (only when games list changes)
   useEffect(() => {
@@ -140,6 +150,9 @@ function App() {
                 Queue All ({consoles.length} console{consoles.length !== 1 ? 's' : ''})
               </button>
             )}
+
+            <SettingsMenu />
+
             {isIncomplete && !isBuilding && (
               <div className="flex items-center gap-2 bg-yellow-500/20 dark:bg-yellow-600/30 px-3 py-2 rounded-lg">
                 <svg className="w-5 h-5 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
@@ -190,6 +203,9 @@ function App() {
 
       {/* Floating queue panel - only show when consoles are loaded */}
       {consoles.length > 0 && <QueuePanel />}
+
+      {/* Admin modal */}
+      <AdminPanel open={isAdminOpen} onClose={() => setIsAdminOpen(false)} />
     </div>
   );
 }
