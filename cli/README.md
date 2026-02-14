@@ -17,6 +17,12 @@ python cli/download_vimms.py --folder "H:/Games/DS" --extract-files
 
 # With interactive prompts (if needed)
 python cli/download_vimms.py --folder "H:/Games/DS" --prompt
+
+# Organize already-downloaded files into rating buckets (uses local webui_index.json when available)
+python cli/download_vimms.py --folder "H:/Games/DS" --categorize-existing
+
+# Auto-sort newly-downloaded games into rating/<n> buckets (integer part)
+python cli/download_vimms.py --folder "H:/Games/DS" --categorize-by-rating
 ```
 
 ### `run_vimms.py`

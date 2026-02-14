@@ -129,6 +129,7 @@ def main(argv=None):
     parser.add_argument('--report', action='store_true', help='Generate a progress report per console instead of running downloads')
     parser.add_argument('--report-format', choices=['json', 'csv'], default='json', help='Report file format (default: json)')
     parser.add_argument('--report-aggregate', action='store_true', help='Also write an overall summary under reports/overall_progress.json')
+    parser.add_argument('--categorize-by-rating', action='store_true', help='Forward --categorize-by-rating to the downloader (organize by Vimm rating)')
     parser.add_argument('--src', help='Path to the project/src root where the downloader script and config live (useful when running the runner from a different CWD)')
 
     args = parser.parse_args(argv)
@@ -354,6 +355,8 @@ def main(argv=None):
     global_forward['extract_files'] = args.extract_files
     global_forward['delete_duplicates'] = args.delete_duplicates
     global_forward['yes_delete'] = args.yes_delete
+    # Forward rating categorization flag to downloader
+    global_forward['categorize_by_rating'] = bool(args.categorize_by_rating)
 
     # Dry-run when --dry-run is passed; otherwise invoke downloads by default
     if args.dry_run:
@@ -626,6 +629,12 @@ def main(argv=None):
             flags.append('--yes-delete')
         elif per_cfg.get('yes_delete'):
             flags.append('--yes-delete')
+
+        # Forward categorize-by-rating to downloader when requested globally or per-folder
+        if global_forward.get('categorize_by_rating'):
+            flags.append('--categorize-by-rating')
+        elif per_cfg.get('categorize_by_rating'):
+            flags.append('--categorize-by-rating')
 
         # Pre-run summary (what's already done)
         pre = _read_progress_summary(t)

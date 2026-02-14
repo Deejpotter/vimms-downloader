@@ -161,7 +161,7 @@ MAX_RETRIES = 3                       # Maximum number of retry attempts
 class VimmsDownloader:
     """Main downloader class for Vimm's Lair"""
     
-    def __init__(self, download_dir: str, system: str, progress_file: str = "download_progress.json", detect_existing: bool = True, delete_duplicates: bool = False, auto_confirm_delete: bool = False, pre_scan: bool = True, extract_files: Optional[bool] = None, section_priority_override: Optional[List[str]] = None, project_root: Optional[str] = None, allow_prompt: bool = False, categorize_by_popularity: bool = False, categorize_by_popularity_mode: str = 'stars'):
+    def __init__(self, download_dir: str, system: str, progress_file: str = "download_progress.json", detect_existing: bool = True, delete_duplicates: bool = False, auto_confirm_delete: bool = False, pre_scan: bool = True, extract_files: Optional[bool] = None, section_priority_override: Optional[List[str]] = None, project_root: Optional[str] = None, allow_prompt: bool = False, categorize_by_popularity: bool = False, categorize_by_popularity_mode: str = 'stars', categorize_by_rating: Optional[bool] = None):
         """
         Initialize the downloader
         
@@ -225,6 +225,14 @@ class VimmsDownloader:
             self.categorize_by_popularity_mode = cfg_cat_mode if cfg_cat_mode in ('stars', 'score') else 'stars'
         else:
             self.categorize_by_popularity_mode = categorize_by_popularity_mode if categorize_by_popularity_mode in ('stars', 'score') else 'stars'
+
+        # New: categorize by Vimm rating (integer bucketed by floor)
+        cfg_cat_rating = cfg.get('defaults', {}).get('categorize_by_rating', None)
+        if categorize_by_rating is None:
+            self.categorize_by_rating = bool(cfg_cat_rating) if cfg_cat_rating is not None else False
+        else:
+            self.categorize_by_rating = bool(categorize_by_rating)
+
         # Keep the inverse property for compatibility with older naming in code paths
         self.keep_archives = not self.extract_files
 
@@ -704,6 +712,126 @@ class VimmsDownloader:
         except Exception:
             pass
 
+    def _categorize_by_rating(self, filepath: Path, game_id: str = None, score: float = None) -> None:
+        """Categorize a downloaded file into `rating/<n>/` where n is the integer part of the Vimm overall rating.
+
+        If `score` is provided it is used directly; otherwise the function will attempt to fetch
+        popularity via `get_game_popularity()` using `game_id` when available.
+        """
+        try:
+            from src.metadata import get_game_popularity
+        except Exception:
+            try:
+                from metadata import get_game_popularity
+            except Exception:
+                get_game_popularity = None
+
+        # Obtain score either from provided value or by querying metadata
+        final_score = None
+        if isinstance(score, (int, float)):
+            final_score = float(score)
+        elif get_game_popularity and game_id:
+            url = f"https://vimm.net/vault/{game_id}"
+            pop = get_game_popularity(url, session=self.session, cache_path=self.download_dir / 'metadata_cache.json', logger=getattr(self, 'logger', None))
+            if pop:
+                final_score = float(pop[0])
+
+        if final_score is None:
+            # Nothing to do
+            if getattr(self, 'logger', None):
+                self.logger.info(f"No rating available for {filepath.name}; skipping rating categorization")
+            return
+
+        # Bucket by integer part (floor), e.g., 8.62 -> 8
+        try:
+            bucket = int(final_score)
+        except Exception:
+            bucket = int(round(final_score))
+
+        dst = self.download_dir / f"rating/{bucket}"
+        dst.mkdir(parents=True, exist_ok=True)
+        target = dst / filepath.name
+        try:
+            # Avoid moving if already in target
+            if filepath.resolve() == target.resolve():
+                return
+            shutil.move(str(filepath), str(target))
+            if getattr(self, 'logger', None):
+                self.logger.info(f"Categorized by rating {filepath} -> {target} (rating={final_score})")
+            else:
+                print(f"  Categorized by rating: {filepath.name} -> rating/{bucket}/")
+        except Exception as e:
+            if getattr(self, 'logger', None):
+                self.logger.exception(f"Could not move file to rating folder: {e}")
+            else:
+                print(f"  ERROR: Could not categorize by rating: {e}")
+
+    def categorize_existing_files(self) -> int:
+        """Scan the local download folder and organize existing ROMs into rating buckets.
+
+        Uses `src/webui_index.json` (if present) to map known game titles to ratings, and
+        falls back to `metadata_cache.json` via `get_game_popularity()` when possible.
+
+        Returns the number of files moved.
+        """
+        moved = 0
+        # Try to load the catalog index (local webui index) to find ratings by title
+        index_path_candidates = [self.project_root / 'src' / 'webui_index.json', self.project_root / 'webui_index.json']
+        index_data = None
+        for p in index_path_candidates:
+            try:
+                if p.exists():
+                    with open(p, 'r', encoding='utf-8') as f:
+                        index_data = json.load(f)
+                    break
+            except Exception:
+                index_data = None
+                break
+
+        # Build a mapping of normalized title -> rating
+        title_to_rating = {}
+        if index_data and isinstance(index_data.get('consoles'), list):
+            for console in index_data.get('consoles', []):
+                # Match by system code when possible
+                if console.get('system') != self.system:
+                    continue
+                sections = console.get('sections', {})
+                for sec, entries in sections.items():
+                    for e in entries:
+                        name = e.get('name')
+                        rating = e.get('rating')
+                        if name and rating is not None:
+                            key = self._normalize_for_match(self._clean_filename(name))
+                            title_to_rating[key] = float(rating)
+
+        # Walk local files and categorize based on webui index mapping or metadata cache
+        for root, dirs, files in os.walk(self.download_dir):
+            for fname in files:
+                path = Path(root) / fname
+                if path.suffix.lower() not in ROM_EXTENSIONS + ARCHIVE_EXTENSIONS:
+                    continue
+                # Try matching by normalized name first against webui_index mapping
+                norm = self._normalize_for_match(self._clean_filename(fname))
+                score = title_to_rating.get(norm)
+                if score is None:
+                    # Attempt to find by scanning the index of known games using find_all_matching_files
+                    # (reverse lookup): iterate known titles and locate local matches
+                    # Skip this expensive step if no index_data available
+                    if index_data:
+                        # Find candidate title keys where norm in key or key in norm
+                        for tkey, tr in title_to_rating.items():
+                            if norm in tkey or tkey in norm:
+                                score = tr
+                                break
+                if score is not None:
+                    # Choose the preferred path (if multiple matches exist) and move
+                    try:
+                        self._categorize_by_rating(path, score=score)
+                        moved += 1
+                    except Exception:
+                        if getattr(self, 'logger', None):
+                            self.logger.exception(f"Failed to categorize existing file {path}")
+        return moved
     
     def get_download_url(self, game_page_url: str, game_id: str) -> Optional[str]:
         """
@@ -1267,6 +1395,8 @@ def main():
     parser.add_argument('--yes-delete', action='store_true', help='Auto-confirm deletion of duplicates (use with caution)')
     parser.add_argument('--categorize-by-popularity', action='store_true', help='Move downloaded files into stars/<n> or score/<n> based on Vimm popularity (uses metadata cache)')
     parser.add_argument('--categorize-by-popularity-mode', choices=['stars','score'], default='stars', help='Categorization mode: stars (default) or score (integer)')
+    parser.add_argument('--categorize-by-rating', action='store_true', help='Organize downloaded files into rating/<n> buckets based on Vimm overall rating (integer part)')
+    parser.add_argument('--categorize-existing', action='store_true', help='Scan existing files in the target folder and organize them into rating buckets using local index/metadata')
     parser.add_argument('--src', help='Path to the project/src root where `vimms_config.json` and scripts live (useful when running from a different CWD)')
     args = parser.parse_args()
 
@@ -1341,7 +1471,14 @@ def main():
         section_priority_override=sections_override,
         allow_prompt=args.prompt,
         categorize_by_popularity=args.categorize_by_popularity,
+        categorize_by_rating=args.categorize_by_rating,
     )
+
+    # If user requested organizing existing files, perform that and exit
+    if getattr(args, 'categorize_existing', False):
+        moved = downloader.categorize_existing_files()
+        print(f"Organized {moved} existing file(s) into rating/ buckets.")
+        return
 
     # Start downloading
     try:

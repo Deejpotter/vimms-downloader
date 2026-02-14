@@ -56,6 +56,29 @@ This file tracks the work planned and completed for this repository. Keep the mo
     - `run_vimms.py --folder <console> --dry-run` resolves the target folder and exits normally
     - Unit tests added for CLI behavior pass locally
 
+- [x] (Completed) **Add rating-based sorting (auto-sort + organize existing files)** — 2026-02-14
+  - **Goal**: Allow downloaded and already-downloaded games to be organized into `rating/<n>/` folders where `n` is the integer part of the Vimm overall rating (e.g. 8.62 → `rating/8`).
+  - **Step 1: Downloader support**
+    - [x] 1.1: Add `categorize_by_rating` option to `VimmsDownloader` and `vimms_config.json` defaults
+    - [x] 1.2: Implement `_categorize_by_rating()` to move files into `rating/<n>/`
+    - [x] 1.3: Call rating categorization after successful download (non-destructive to existing detection)
+  - **Step 2: CLI & runner**
+    - [x] 2.1: Add `--categorize-by-rating` and `--categorize-existing` flags to `cli/download_vimms.py`
+    - [x] 2.2: Forward `--categorize-by-rating` from `run_vimms.py` to the downloader
+    - [x] 2.3: Add `--categorize-existing` mode to organize already-downloaded files
+  - **Step 3: Organize existing files**
+    - [x] 3.1: `categorize_existing_files()` scans local files and uses `src/webui_index.json` (when present) or metadata cache to find ratings
+    - [x] 3.2: Move matching files into rating buckets (idempotent)
+  - **Step 4: Tests & docs**
+    - [x] 4.1: Add unit tests for `_categorize_by_rating()` and `categorize_existing_files()`
+    - [x] 4.2: Update `cli/README.md` with usage examples
+    - [x] 4.3: Run full test suite and ensure no regressions
+  - **Acceptance criteria**:
+    - New files are placed under `rating/<n>/` when `--categorize-by-rating` is enabled
+    - `cli/download_vimms.py --categorize-existing` organizes previously-downloaded ROMs when `webui_index.json` or metadata is available
+    - Existing local-detection and indexing continue to work (files in `rating/` are discovered)
+    - All unit tests pass locally
+
 - [ ] (Todo) **Extract game details during index build (rating/size/extension from section & game pages)** — 2026-01-26
   - **Step 1: Extract rating from section page HTML (already fetched)**
     - [x] 1.1: Update `parse_games_from_section()` to extract rating from table (DONE - extracts from cell 4)
