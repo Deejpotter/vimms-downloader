@@ -16,165 +16,165 @@
   },
   "folders": {
     "DS": {
-      "_comment": "Nintendo DS folder: DS uses extraction by default in this workspace.",
       "active": true,
-      "extract_files": true,
-      "priority": 1
+      "priority": 1,
+      "_comment": "Nintendo DS folder: DS uses extraction by default in this workspace.",
+      "extract_files": true
     },
     "GBA": {
-      "_comment": "Game Boy Advance (GBA) folder \u2014 active.",
       "active": true,
-      "priority": 2
+      "priority": 2,
+      "_comment": "Game Boy Advance (GBA) folder \u2014 active."
     },
     "N64": {
-      "_comment": "Nintendo 64 (N64) folder \u2014 active.",
       "active": true,
-      "priority": 3
+      "priority": 3,
+      "_comment": "Nintendo 64 (N64) folder \u2014 active."
     },
     "GBC": {
-      "_comment": "Game Boy Color (GBC) folder \u2014 active.",
       "active": true,
-      "priority": 4
+      "priority": 4,
+      "_comment": "Game Boy Color (GBC) folder \u2014 active."
     },
     "SNES": {
-      "_comment": "Super Nintendo (SNES) folder \u2014 active.",
       "active": true,
-      "priority": 5
+      "priority": 5,
+      "_comment": "Super Nintendo (SNES) folder \u2014 active."
     },
     "GB": {
-      "_comment": "Game Boy (GB) folder \u2014 active.",
       "active": true,
-      "priority": 6
+      "priority": 6,
+      "_comment": "Game Boy (GB) folder \u2014 active."
     },
     "NES": {
-      "_comment": "Nintendo Entertainment System (NES) folder \u2014 active.",
       "active": true,
-      "priority": 7
+      "priority": 7,
+      "_comment": "Nintendo Entertainment System (NES) folder \u2014 active."
     },
     "PS1": {
-      "_comment": "PlayStation 1 (PS1) folder \u2014 active.",
       "active": true,
-      "priority": 8
+      "priority": 8,
+      "_comment": "PlayStation 1 (PS1) folder \u2014 active."
     },
     "PSP": {
-      "_comment": "PlayStation Portable (PSP) folder \u2014 active.",
       "active": true,
-      "priority": 9
-    },
-    "GC": {
-      "_comment": "GameCube (GC) folder \u2014 active.",
-      "active": true,
-      "priority": 10
-    },
-    "PS2": {
-      "_comment": "PlayStation 2 (PS2) folder \u2014 active.",
-      "active": true,
-      "priority": 11
-    },
-    "Atari5200": {
-      "_comment": "Atari 5200 folder \u2014 active.",
-      "active": true,
-      "priority": 12
-    },
-    "Dreamcast": {
-      "_comment": "Dreamcast (Sega) console folder \u2014 active",
-      "active": true,
-      "priority": 13
-    },
-    "Genesis": {
-      "_comment": "Sega Genesis / Mega Drive folder \u2014 active.",
-      "active": true,
-      "priority": 14
-    },
-    "Saturn": {
-      "_comment": "Sega Saturn folder \u2014 active.",
-      "active": true,
-      "priority": 15
-    },
-    "Wii": {
-      "_comment": "Nintendo Wii folder \u2014 active.",
-      "active": true,
-      "priority": 16
-    },
-    "3DS": {
-      "_comment": "Nintendo 3DS folder \u2014 active.",
-      "active": true,
-      "priority": 17
+      "priority": 9,
+      "_comment": "PlayStation Portable (PSP) folder \u2014 active."
     },
     "Atari2600": {
-      "_comment": "Atari 2600 folder \u2014 active.",
       "active": true,
-      "priority": 18
+      "priority": 10,
+      "_comment": "Atari 2600 folder \u2014 active."
     },
-    "Xbox": {
-      "_comment": "Xbox folder \u2014 active.",
+    "Atari5200": {
       "active": true,
-      "priority": 19
+      "priority": 11,
+      "_comment": "Atari 5200 folder \u2014 active."
     },
     "Atari7800": {
-      "_comment": "Atari 7800 folder \u2014 active.",
       "active": true,
-      "priority": 20
+      "priority": 12,
+      "_comment": "Atari 7800 folder \u2014 active."
     },
-    "CDi": {
-      "_comment": "CD-i folder \u2014 active.",
+    "Dreamcast": {
       "active": true,
-      "priority": 21
+      "priority": 13,
+      "_comment": "Dreamcast (Sega) console folder \u2014 active"
     },
-    "GG": {
-      "_comment": "Sega Game Gear folder \u2014 active. Vimm uses 'GG' as the system code.",
+    "Genesis": {
       "active": true,
-      "priority": 22
+      "priority": 14,
+      "_comment": "Sega Genesis / Mega Drive folder \u2014 active."
     },
-    "Jaguar": {
-      "_comment": "Atari Jaguar folder \u2014 active.\",\n      \"active\": true,\n      \"priority\": 26\n    },\n    \"JaguarCD\": {\n      \"_comment\": \"Atari Jaguar CD folder \u2014 active.",
+    "Saturn": {
       "active": true,
-      "priority": 23
-    },
-    "Lynx": {
-      "_comment": "Atari Lynx folder \u2014 active.",
-      "active": true,
-      "priority": 24
-    },
-    "32X": {
-      "_comment": "Sega 32X folder \u2014 active. Vimm uses '32X' as the system code.",
-      "active": true,
-      "priority": 25
-    },
-    "SegaCD": {
-      "_comment": "Sega CD folder \u2014 active.",
-      "active": true,
-      "priority": 26
-    },
-    "SMS": {
-      "_comment": "Sega Master System folder \u2014 active.",
-      "active": true,
-      "priority": 27
+      "priority": 15,
+      "_comment": "Sega Saturn folder \u2014 active."
     },
     "TurboGrafx16": {
-      "_comment": "TurboGrafx-16 folder \u2014 active.",
       "active": true,
-      "priority": 28
+      "priority": 16,
+      "_comment": "TurboGrafx-16 folder \u2014 active."
+    },
+    "Jaguar": {
+      "active": true,
+      "priority": 17,
+      "_comment": "Atari Jaguar folder \u2014 active.\",\n      \"active\": true,\n      \"priority\": 26\n    },\n    \"JaguarCD\": {\n      \"_comment\": \"Atari Jaguar CD folder \u2014 active."
+    },
+    "Lynx": {
+      "active": true,
+      "priority": 18,
+      "_comment": "Atari Lynx folder \u2014 active."
+    },
+    "SegaCD": {
+      "active": true,
+      "priority": 19,
+      "_comment": "Sega CD folder \u2014 active."
     },
     "TurboGrafxCD": {
-      "_comment": "TurboGrafx-CD folder \u2014 active.",
       "active": true,
-      "priority": 29
+      "priority": 20,
+      "_comment": "TurboGrafx-CD folder \u2014 active."
+    },
+    "32X": {
+      "active": true,
+      "priority": 21,
+      "_comment": "Sega 32X folder \u2014 active. Vimm uses '32X' as the system code."
+    },
+    "GC": {
+      "active": true,
+      "priority": 22,
+      "_comment": "GameCube (GC) folder \u2014 active."
+    },
+    "PS2": {
+      "active": true,
+      "priority": 23,
+      "_comment": "PlayStation 2 (PS2) folder \u2014 active."
+    },
+    "Wii": {
+      "active": true,
+      "priority": 24,
+      "_comment": "Nintendo Wii folder \u2014 active."
+    },
+    "3DS": {
+      "active": true,
+      "priority": 25,
+      "_comment": "Nintendo 3DS folder \u2014 active."
+    },
+    "Xbox": {
+      "active": true,
+      "priority": 26,
+      "_comment": "Xbox folder \u2014 active."
+    },
+    "CDi": {
+      "active": true,
+      "priority": 27,
+      "_comment": "CD-i folder \u2014 active."
+    },
+    "GG": {
+      "active": true,
+      "priority": 28,
+      "_comment": "Sega Game Gear folder \u2014 active. Vimm uses 'GG' as the system code."
+    },
+    "SMS": {
+      "active": true,
+      "priority": 29,
+      "_comment": "Sega Master System folder \u2014 active."
     },
     "VirtualBoy": {
-      "_comment": "Nintendo Virtual Boy folder \u2014 active.",
       "active": true,
-      "priority": 30
+      "priority": 30,
+      "_comment": "Nintendo Virtual Boy folder \u2014 active."
     },
     "WiiWare": {
-      "_comment": "WiiWare folder \u2014 active.",
       "active": true,
-      "priority": 31
+      "priority": 31,
+      "_comment": "WiiWare folder \u2014 active."
     },
     "Xbox360": {
-      "_comment": "Xbox 360 folder \u2014 active.",
       "active": true,
-      "priority": 32
+      "priority": 32,
+      "_comment": "Xbox 360 folder \u2014 active."
     }
   },
   "limits": {

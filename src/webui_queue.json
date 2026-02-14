@@ -1,6 +1,7 @@
 [
   {
-    "folder": "H:\\Games\\3DS",
-    "title": "Ace Combat: Assault Horizon Legacy+"
+    "type": "console",
+    "folder": "H:\\Games\\PSP\\ROMs",
+    "console_name": "PSP"
   }
 ]
