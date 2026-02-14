@@ -1132,6 +1132,15 @@ class VimmsDownloader:
                     except Exception:
                         if getattr(self, 'logger', None):
                             self.logger.exception(f'Failed to categorize downloaded file {filepath} for {game_id}')
+                
+                # Optionally categorize the downloaded file by rating
+                if self.categorize_by_rating:
+                    try:
+                        self._categorize_by_rating(filepath, game_id=game_id)
+                    except Exception:
+                        if getattr(self, 'logger', None):
+                            self.logger.exception(f'Failed to categorize by rating {filepath} for {game_id}')
+                
                 # Respect configured delay between downloads
                 self._random_delay(self.delay_between_downloads)
 

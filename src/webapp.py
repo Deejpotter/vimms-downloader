@@ -1062,12 +1062,18 @@ def api_index_build_internal(workspace_root):
                             logger.exception(f"api_index_build_internal: error checking '{game['name']}': {e}")
                             pass
                         
-                        annotated_games.append({
+                        game_entry = {
                             'id': game.get('game_id', ''),
                             'name': game.get('name', ''),
                             'url': game.get('page_url', ''),
                             'present': present
-                        })
+                        }
+                        
+                        # Preserve rating if extracted from section page
+                        if 'rating' in game:
+                            game_entry['rating'] = game['rating']
+                        
+                        annotated_games.append(game_entry)
                         total_games += 1
                         INDEX_PROGRESS['games_found'] = total_games
                     

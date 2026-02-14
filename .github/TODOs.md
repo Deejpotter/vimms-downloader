@@ -2,6 +2,73 @@
 
 This file tracks the work planned and completed for this repository. Keep the most recent 10 completed items.
 
+- [ ] (In Progress) **Enable full rating-based categorization (index rebuild + existing files organizer)** — 2026-02-14
+  - **Goal**: Make rating-based sorting fully operational for both new downloads and existing files
+  - **Background**: Rating categorization code implemented but webui_index.json lacks rating data (parse extracts it but webapp didn't preserve it)
+  - **Status**: Code fixes complete; testing and index rebuild remaining
+  
+  - **Step 1: Fix webapp to preserve rating data from parse function** ✅ COMPLETE
+    - **Logic**: parse_games_from_section() already extracts ratings; webapp must preserve the 'rating' field when building index
+    - [x] 1.1: Update src/webapp.py api_index_build_internal() to preserve 'rating' field in annotated_games
+    - [x] 1.2: Update fast build in api_index_build_fast_internal() to also preserve rating (already done)
+    - [x] 1.3: Clean bytecode cache and recompile webapp
+    
+  - **Step 2: Create metadata fetching system for individual game lookups** ✅ COMPLETE
+    - **Logic**: For games without ratings in index, fetch from game detail page; cache results to avoid repeated network calls
+    - [x] 2.1: Create src/metadata.py with get_game_popularity() function
+    - [x] 2.2: Implement rating extraction from game detail pages using parse_game_details()
+    - [x] 2.3: Add caching to metadata_cache.json to persist fetched ratings
+    - [x] 2.4: **VERIFIED**: Test fetch shows ratings extracted correctly (8.6, 5.5 for sample DS games)
+    
+  - **Step 3: Rebuild index with rating data** ⏸️ MANUAL STEP REQUIRED
+    - **Logic**: Force full index rebuild to populate ratings for all games from section pages
+    - [x] 3.1: Backup existing webui_index.json to webui_index.json.backup  
+    - [x] 3.2: Delete webui_index.json to trigger clean rebuild
+    - [ ] 3.3: **MANUAL**: Delete `src/webui_index.json` and all backup files, then start webapp: `python src/webapp.py`
+    - [ ] 3.4: **MANUAL**: Open http://127.0.0.1:8000 and trigger full rebuild via UI or API: `curl -X POST -H "Content-Type: application/json" -d '{"workspace_root":"H:/Games"}' http://127.0.0.1:8000/api/index/build`
+    - [ ] 3.5: **MANUAL**: Wait for build to complete (~30+ min for consoles with many ROMs due to network fetching from Vimm)
+    - [ ] 3.6: **MANUAL**: Verify ratings in rebuilt index: `python -c "import json; d=json.load(open('src/webui_index.json')); ds=[c for c in d.get('consoles',[]) if c.get('system')=='DS'][0]; games_with_ratings=sum(1 for sec in ds.get('sections',{}).values() for g in sec if g.get('rating')); print(f'DS games with ratings: {games_with_ratings}')"`
+    
+  - **Step 4: Test categorize_existing_files() with populated ratings** ⏸️ AWAITING INDEX REBUILD
+    - **Logic**: With ratings in index, organize existing DS ROMs into rating/N/ folders
+    - [ ] 4.1: After index rebuild, run: `python cli/download_vimms.py --folder "H:/Games/DS" --categorize-existing`
+    - [ ] 4.2: Verify files are moved to rating/N/ subdirectories (e.g., rating/8/, rating/9/)
+    - [ ] 4.3: Check that detection still works (files in rating/ are indexed)
+    - [ ] 4.4: Verify idempotency (run --categorize-existing again, should move 0 files)
+    
+  - **Step 5: Test automatic categorization on new downloads** ⏸️ AWAITING STEP 4
+    - **Logic**: Verify new downloads are automatically placed in rating folders when flag is enabled
+    - [ ] 5.1: Add to vimms_config.json: `"defaults": {"categorize_by_rating": true}`
+    - [ ] 5.2: Download a test game: `python cli/download_vimms.py --folder "H:/Games/DS" --categorize-by-rating --section-priority "A"`
+    - [ ] 5.3: Verify file is placed in rating/N/ folder automatically
+    - [ ] 5.4: Confirm progress tracking works correctly
+    
+  - **Step 6: Integration test and documentation** ⏸️ FINAL STEP
+    - **Logic**: Verify end-to-end workflow and document the feature
+    - [ ] 6.1: Test on another console (e.g., GBA)
+    - [ ] 6.2: Run test suite: `python -m pytest tests/`
+    - [ ] 6.3: Update this TODO entry to Completed status
+    
+  - **Acceptance Criteria**:
+    - ✅ Code changes complete: webapp preserves ratings, metadata.py created, download flow updated
+    - ✅ Rating extraction verified: parse function correctly extracts ratings from Vimm section pages
+    - ⏸️ Index rebuild: User must manually rebuild index to populate rating data (time-intensive)
+    - ⏸️ Categorization: Requires index with ratings to organize existing files
+    - ⏸️ Auto-download: Ready to test after index rebuild completes
+
+- [x] (Completed) **Fix stale bytecode cache causing TypeError for categorize_by_rating** — 2026-02-14
+  - **Issue**: After implementing rating-based sorting feature, `run_vimms.py` failed for all consoles except DS with `TypeError: VimmsDownloader.__init__() got an unexpected keyword argument 'categorize_by_rating'`
+  - **Root Cause**: Stale Python bytecode cache (.pyc files) in `cli/__pycache__/` dated 14:38, while source files were modified at 14:42
+  - **Resolution Steps**:
+    - [x] 1. Investigated error pattern (DS succeeded, GBA+ failed with same error)
+    - [x] 2. Verified `categorize_by_rating` parameter exists in `__init__` signature (line 164)
+    - [x] 3. Confirmed committed code (44fceb4) has correct implementation
+    - [x] 4. Identified timestamp mismatch: .pyc (14:38) older than .py (14:42)
+    - [x] 5. Deleted stale `cli/__pycache__` and recompiled with `python -m py_compile`
+    - [x] 6. Cleaned all `__pycache__` directories project-wide using `find . -type d -name __pycache__ -exec rm -rf {} +`
+    - [x] 7. Verified fix with test suite: 14 tests passed (rating + core downloader tests)
+  - **Prevention**: Added note to instructions about clearing bytecode cache after git operations on Windows (time resolution issues can cause stale cache)
+
 - [x] (Completed) **Implement comprehensive queue system matching CLI functionality** — 2026-01-26
   - **Goal**: Make web app queue work like CLI (queue all/console/section/game)
   - **Step 1: Update queue data structure to support 4 types**
