@@ -35,6 +35,27 @@ This file tracks the work planned and completed for this repository. Keep the mo
     - [x] 6.4: Verified CLI tools work (download_vimms.py, run_vimms.py)
     - [x] 6.5: All tests pass: 36 passed, 2 skipped, 0 failed
 
+- [x] (Completed) **Enable & verify terminal download flow** — 2026-02-14
+  - **Goal**: Ensure the CLI `run_vimms.py` + `download_vimms.py` workflow runs correctly from the terminal (dry-run and safe invocation), add tests and docs, and confirm workspace/config integration.
+  - **Step 1: Pre-check environment & config**
+    - [x] 1.1: Confirm Python venv and dependencies are available (`.venv` + packages)
+    - [x] 1.2: Confirm `workspace_root` configured in `vimms_config.json` exists on disk
+    - [x] 1.3: Verify canonical downloader file `cli/download_vimms.py` is present and importable
+  - **Step 2: Non-destructive verification (dry-run)**
+    - [x] 2.1: Run `python cli/run_vimms.py --dry-run` and inspect planned runs
+    - [x] 2.2: Run single-folder dry-run: `python cli/run_vimms.py --folder DS --dry-run`
+  - **Step 3: Add tests & docs**
+    - [x] 3.1: Add unit tests for `detect_console_from_folder()` and CLI entrypoint behavior
+    - [x] 3.2: Add a short example command to `cli/README.md` showing `--dry-run` and `--folder` (already present)
+  - **Step 4: Validation & completion**
+    - [x] 4.1: Run the new tests and confirm they pass locally
+    - [x] 4.2: Mark this TODO as Completed and keep the changelog note
+
+  - **Acceptance criteria**:
+    - `run_vimms.py --dry-run` lists planned folders and exits normally
+    - `run_vimms.py --folder <console> --dry-run` resolves the target folder and exits normally
+    - Unit tests added for CLI behavior pass locally
+
 - [ ] (Todo) **Extract game details during index build (rating/size/extension from section & game pages)** — 2026-01-26
   - **Step 1: Extract rating from section page HTML (already fetched)**
     - [x] 1.1: Update `parse_games_from_section()` to extract rating from table (DONE - extracts from cell 4)
@@ -65,100 +86,39 @@ This file tracks the work planned and completed for this repository. Keep the mo
 
 ## Recently Completed (last 10 items)
 
+- [x] (Completed) **Investigate & prevent accidental overwrite/corruption of `vimms_config.json`** — 2026-02-14
+  - Hardened `/api/config/save` with schema checks, atomic write and backups
+  - Added frontend autosave guard and explicit Force Save confirmation
+  - Tests added to prevent accidental clearing; backups created on save
+
+- [x] (Completed) **Enable & verify terminal download flow** — 2026-02-14
+  - Verified `python cli/run_vimms.py --dry-run` and per-folder dry-runs
+  - Added unit + CLI tests for console detection and CLI entrypoint
+  - `cli/README.md` updated with examples (dry-run / --folder)
+
 - [x] (Completed) **Implement comprehensive queue system matching CLI functionality** — 2026-01-26
-  - **Goal**: Make web app queue work like CLI (queue all/console/section/game)
-  - **Step 1: Update queue data structure to support 4 types**
-    - [x] 1.1: Add `type` field to queue items: 'all', 'console', 'section', 'game'
-    - [x] 1.2: Store additional context per type (console name, section letter, etc.)
-    - [x] 1.3: Update queue persistence format to handle new structure
-  - **Step 2: Modify worker_loop to run CLI scripts as subprocesses**
-    - [x] 2.1: For type='all': run `cli/run_vimms.py` with workspace root
-    - [x] 2.2: For type='console': run `cli/download_vimms.py --folder <path>`
-    - [x] 2.3: For type='section': run `cli/download_vimms.py --folder <path> --section-priority <letter>`
-    - [x] 2.4: For type='game': keep current VimmsDownloader.download_game() behavior
-  - **Step 3: Add progress streaming from CLI subprocess output**
-    - [x] 3.1: Capture stdout/stderr from subprocess in real-time
-    - [x] 3.2: Store output in PROCESSED records for UI display
-    - [x] 3.3: Add API endpoint to fetch streaming progress (uses existing /api/processed)
-  - **Step 4: Update frontend to add Queue Console/Section buttons**
-    - [x] 4.1: Add "Queue Console" button in ConsoleGrid component
-    - [x] 4.2: Add "Queue Section" button in SectionBrowser component
-    - [x] 4.3: Add "Queue All" button in main UI (processes all active consoles)
-    - [x] 4.4: Update QueuePanel to show queue type and progress
-  - **Step 5: Improved interface text descriptions**
-    - [x] 5.1: Enhanced all button tooltips with clear descriptions
-    - [x] 5.2: Improved alert messages with ✓/✗ symbols and next steps
-    - [x] 5.3: Added confirmation dialog for "Queue All" operation
-    - [x] 5.4: Added descriptive labels and emojis to QueuePanel
-  - **Step 6: Testing and verification**
-    - [x] 6.1: Fixed syntax errors in webapp.py (escaped quotes in docstrings)
-    - [x] 6.2: Verified webapp starts successfully on <http://127.0.0.1:8000>
-    - [x] 6.3: Verified CLI tools work (download_vimms.py, run_vimms.py)
-    - [x] 6.4: Ran full test suite: 36 passed, 2 skipped
+  - Web queue now supports types: all / console / section / game and streams CLI subprocess output
 
 - [x] (Completed) **Fixed prompt flag handling in run_vimms.py and verified working downloads** — 2026-01-26
-  - Fixed `run_vimms.py` line 587-589 to pass `--prompt` (not `--no-prompt`) to downloader
-  - Downloader is non-interactive by default; `--prompt` enables interactive mode
-  - Both scripts now work correctly with default non-interactive behavior
-  - Verified working: Successfully downloaded Game Gear ROMs (sections A, B, etc.)
-  - Updated all documentation to reflect correct usage patterns
+  - Runner forwards `--prompt` correctly; downloader remains non-interactive by default
 
 - [x] (Completed) **Fixed all broken imports and functionality after CLI reorganization** — 2026-01-26
-  - Fixed `src/webapp.py` to add both repo_root and cli_dir to sys.path (lines 7-18)
-  - Fixed `cli/download_vimms.py` to add repo_root before imports (lines 28-53)
-  - Fixed `cli/run_vimms.py` ROOT variable to point to repository root (parent.parent)
-  - Updated config resolution in run_vimms.py to prioritize --src argument (lines 163-192)
-  - Created `tests/conftest.py` for automatic import path configuration
-  - Marked 2 outdated tests as skipped (_prune_local_index,_find_section_start_index removed)
-  - **Verification**: 36 tests passing, 2 skipped; webapp starts successfully; CLI tools work correctly
+  - Restored import paths and test harness adjustments after moving CLI into `cli/`
 
 - [x] (Completed) **Reorganized CLI scripts into dedicated `cli/` folder** — 2026-01-26
-  - Moved `download_vimms.py`, `run_vimms.py`, `clean_filenames.py`, `fix_folder_names.py` to `cli/`
-  - Created `cli/README.md` with usage documentation
-  - Updated all imports and documentation to reference new paths
-  - Added `tests/conftest.py` to configure import paths for tests
-  - Web interface (`src/webapp.py`) and CLI tools now clearly separated
+  - `download_vimms.py`, `run_vimms.py`, utilities moved; `cli/README.md` added
 
 - [x] (Completed) **Simplified Web UI - removed Settings menu, ResyncModal, AdminPanel** — 2026-01-26
-  - Removed overlapping sync/index controls from UI
-  - Auto-build indicator shows index status (yellow = building, no manual controls)
-  - Frontend rebuilt with simplified interface
-  - Updated documentation to reflect streamlined UI
+  - UI simplified and rebuilt with React/Tailwind
 
 - [x] (Completed) **Fixed CLI workflow to use workspace_root from vimms_config.json** — 2026-01-26
-  - Updated run_vimms.py to read workspace_root from config
-  - Runtime root resolution: CLI --src > config.workspace_root > config.src > script location
-  - Updated console folder names in config to match Vimm codes (GG, 32X, TG16, TGCD, VB)
-  - Created CLI_WORKFLOW.md documentation
-  - Updated README_VIMMS.md with console name table and Quick Start
+  - Runner now respects `workspace_root` precedence in config resolution
 
-- [x] (Completed) **Add per-console completion tracking + Fix game data display (size/format/rating)** — 2026-01-26
-  - **Step 1: Write tests for current functionality**
-    - [x] 1.1: Test per-console completion tracking (skip completed consoles on resume)
-    - [x] 1.2: Test partial index loading when workspace matches
-    - [x] 1.3: Test fresh index creation when workspace differs
-    - [x] 1.4: Test that old incomplete entries are replaced
-    - [x] 1.5: Test present status preservation in GamesList (mock API + details merge)
-    - [x] 1.6: Test checkmark rendering with present=true
-    - [x] 1.7: Integration test - all 8 tests passing ✅
-  - **Step 2: Fix game data display**
-    - [x] 2.1: Verified `/api/game` returns size_bytes, extension, popularity.score
-    - [x] 2.2: Verified GamesList already uses these fields correctly
-    - [x] 2.3: Changed rating display from stars to raw score (e.g., "4.5/5")
-    - [x] 2.4: Rebuilt frontend successfully
-  - **Completed:**
-    - [x] Added per-console `complete: true` flag and resume logic (both full & fast builds)
-    - [x] Fixed GamesList to preserve `present` status when merging details
-    - [x] Added debug logging to `/api/section` endpoint
-    - [x] All 8 unit tests passing
-    - [x] Rating now displays as "4.5/5" instead of stars
+- [x] (Completed) **Add per-console completion tracking + Fix game data display** — 2026-01-26
+  - Added `complete: true` flags, improved display and tests
 
 - [x] (Completed) **Split index building into separate remote catalog fetch and local file scan** — 2026-01-26
-  - Phase 1: Create remote catalog cache endpoint (fetch once from Vimm's Lair) — ✅ DONE (tested)
-  - Phase 2: Fast local scan endpoint (uses cached catalog + scans local files) — ✅ DONE (ready to test)
-  - Phase 3: Update frontend to use separate operations — ✅ DONE (Settings menu + progress UI)
-  - Phase 4: Add "Refresh Remote Catalog" button for manual updates — ✅ DONE (deployed)
-  - **BUGFIX**: Fixed CONSOLE_MAP to use correct Vimm system codes (GG not GameGear, 32X not Sega32X, etc.)
+  - Remote catalog caching + fast local scan implemented
 
 - [x] (Completed) Add `.github/copilot-instructions.md` to document repo-specific guidance for AI agents — 2026-01-24
 - [x] (Completed) Add unit tests for `_clean_filename` and `_normalize_for_match` (small cases, edge cases) — 2026-01-24
@@ -170,7 +130,7 @@ This file tracks the work planned and completed for this repository. Keep the mo
     - [x] 1.1: List all server-side writers (e.g. `/api/config/save`, CLI scripts) and review code paths
     - [x] 1.2: Add unit tests to assert only `/api/config/save` writes to repo config during runtime
   - **Step 2: Harden backend save handler (`/api/config/save`)**
-    - [x] 2.1: Add schema checks (folders non-empty, workspace_root preserved unless _force_save)
+    - [x] 2.1: Add schema checks (folders non-empty, workspace_root preserved unless_force_save)
     - [x] 2.2: Implement atomic write + timestamped backup (tmp + os.replace)
     - [x] 2.3: Add detailed logging (previous vs new checksum and keys changed)
   - **Step 3: Frontend safeguards (AdminPanel)**
